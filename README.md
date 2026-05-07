@@ -1,6 +1,6 @@
-# ⚙️ WanderPlan US - Backend API
+# ⚙️ minutebound US - Backend API
 
-This is the backend service for WanderPlan US. Built with FastAPI, it serves as the core data processing engine, communicating with external travel APIs, managing geocoding, and returning optimized trip data to the frontend.
+This is the backend service for minutebound US. Built with FastAPI, it serves as the core data processing engine, communicating with external travel APIs, managing geocoding, and returning optimized trip data to the frontend.
 
 ## 🛠️ Tech Stack
 

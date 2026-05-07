@@ -32,7 +32,7 @@ htmlcov/
 coverage.xml
 
 # =========================
-# Project Specific (Wanderplan)
+# Project Specific (minutebound)
 # =========================
 # Ignore user-uploaded profile pictures but preserve the directory structure
 static/profiles/*

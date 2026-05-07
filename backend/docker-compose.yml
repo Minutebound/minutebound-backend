@@ -15,7 +15,7 @@ services:
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - REDIS_URL=redis://redis:6379
     networks:
-      - wanderplan-network
+      - minutebound-network
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -34,7 +34,7 @@ services:
     volumes:
       - es_data:/usr/share/elasticsearch/data
     networks:
-      - wanderplan-network
+      - minutebound-network
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:9200 || exit 1"]
       interval: 10s
@@ -47,7 +47,7 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - wanderplan-network
+      - minutebound-network
     restart: unless-stopped
 
   redis-insight:
@@ -56,7 +56,7 @@ services:
     ports:
       - "5540:5540"
     networks:
-      - wanderplan-network
+      - minutebound-network
     restart: unless-stopped
     depends_on:
       - redis
@@ -72,8 +72,8 @@ services:
       - backend
 
 networks:
-  wanderplan-network:
-    name: wanderplan-network 
+  minutebound-network:
+    name: minutebound-network 
     driver: bridge
 
 volumes:

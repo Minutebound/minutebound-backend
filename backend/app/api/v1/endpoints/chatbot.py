@@ -20,7 +20,7 @@ class ChatRequest(BaseModel):
 async def chat_with_ai(request: ChatRequest):
     try:
         system_content = (
-            "You are WanderBot, an expert travel assistant for the WanderPlan app. "
+            "You are WanderBot, an expert travel assistant for the minutebound app. "
             "Help users plan trips, suggest local attractions, give weather advice, "
             "and create day-by-day itineraries. Keep responses concise and engaging."
         )

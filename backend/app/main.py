@@ -115,7 +115,7 @@ async def startup():
     redis = aioredis.from_url(redis_url, encoding="utf8", decode_responses=False)
     FastAPICache.init(
         RedisBackend(redis), 
-        prefix="wanderplan-cache",
+        prefix="minutebound-cache",
         key_builder=custom_key_builder 
     )
     app.state.redis = aioredis.from_url(redis_url, encoding="utf8", decode_responses=True)

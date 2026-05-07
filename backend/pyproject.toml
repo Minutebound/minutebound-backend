@@ -1,5 +1,5 @@
 [project]
-name = "wanderplan-tests"                                                                                                                                                                                         
+name = "minutebound-tests"                                                                                                                                                                                         
 requires-python = ">=3.10"                                                                                                                                                                                          
    
 [project.optional-dependencies]                                                                                                                                                                                     

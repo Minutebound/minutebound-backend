@@ -1,9 +1,16 @@
 import uuid
 import enum
+import random
+import string
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Integer, Enum, JSON
 from sqlalchemy.orm import relationship
 from app.db.database import Base
+
+def generate_travel_id():
+    """Generates an 8-character string: '#' followed by 7 alphanumeric chars."""
+    chars = string.ascii_uppercase + string.digits
+    return "#" + ''.join(random.choices(chars, k=7))
 
 class VisibilityEnum(str, enum.Enum):
     PRIVATE = "PRIVATE"
@@ -28,6 +35,10 @@ class User(Base):
     # --- PRIMARY IDENTIFIER ---
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
 
+    # --- BUSINESS / TRAVEL IDENTITY ---
+    business_id = Column(String(36), nullable=True, index=True) # Future-proofing for business travel
+    unique_travel_id = Column(String(8), unique=True, index=True, default=generate_travel_id, nullable=False)
+
     # --- PERSONAL IDENTITY ---
     first_name = Column(String(100), nullable=False)
     middle_name = Column(String(100), nullable=True)
@@ -37,7 +48,7 @@ class User(Base):
 
     # --- CONTACT INFORMATION ---
     email = Column(String(255), unique=True, index=True, nullable=False)
-    phone_country_code = Column(String(5), nullable=True,default="+1") 
+    phone_country_code = Column(String(5), nullable=True, default="+1") 
     phone_number = Column(String(20), unique=True, index=True, nullable=True) 
 
     # --- PREFERENCES ---
@@ -51,7 +62,7 @@ class User(Base):
     is_locked = Column(Boolean, default=False)
     failed_login_attempts = Column(Integer, default=0)
     
-    # --- OTP & VERIFICATION (SPLIT INTO EMAIL AND PHONE) ---
+    # --- OTP & VERIFICATION ---
     is_email_verified = Column(Boolean, default=False)
     email_verification_code = Column(String(6), nullable=True)
     email_verification_code_expires = Column(DateTime(timezone=True), nullable=True)

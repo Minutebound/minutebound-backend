@@ -158,10 +158,10 @@ def send_background_trip_email(user_email: str, user_name: str, destination: str
     try:
         pdf_bytes = build_pdf_content(trip_data)
         msg = EmailMessage()
-        msg['Subject'] = f"Your Wanderplan Itinerary: {destination}!"
+        msg['Subject'] = f"Your minutebound Itinerary: {destination}!"
         msg['From'] = settings.FROM_EMAIL
         msg['To'] = user_email
-        email_body = f"Hi {user_name},\n\nGreat news! Your trip to {destination} has been successfully saved.\n\nAttached is your custom PDF itinerary.\n\nSafe travels!\nThe Wanderplan Team"
+        email_body = f"Hi {user_name},\n\nGreat news! Your trip to {destination} has been successfully saved.\n\nAttached is your custom PDF itinerary.\n\nSafe travels!\nThe minutebound Team"
         msg.set_content(email_body)
         msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=f"{destination}_Itinerary.pdf")
         

@@ -7,6 +7,7 @@ class UserCreate(BaseModel):
     last_name: str = Field(..., max_length=100)
     middle_name: str | None = Field(None, max_length=100)
     suffix: str | None = Field(None, max_length=20)
+    business_id: str | None = Field(None, max_length=36) # Added to schema
     # Optional phone at signup
     phone_country_code: str | None = Field(None, pattern=r"^\+\d{1,4}$") 
     phone_number: str | None = Field(None, min_length=7, max_length=20)
@@ -39,7 +40,7 @@ class ResendEmailOTP(BaseModel):
 
 # --- PHONE OTP SCHEMAS ---
 class VerifyPhoneOTP(BaseModel):
-    email: EmailStr # Usually use email to look up the user session
+    email: EmailStr 
     phone_code: str = Field(..., min_length=6, max_length=6)
 
 class ResendPhoneOTP(BaseModel):

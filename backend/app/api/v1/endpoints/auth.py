@@ -49,22 +49,13 @@ def send_otp_email(to_email: str, code: str, purpose: str = "verification"):
         print(f"Failed to send email to {to_email}: {e}")
         print(f"--- LOCAL DEV FALLBACK: {purpose.upper()} EMAIL CODE FOR {to_email} IS [{code}] ---")
 
-def send_otp_sms(phone_country_code: str, phone_number: str, code: str):
-    """
-    Mock function for sending SMS. In production, integrate Twilio, AWS SNS, or MessageBird here.
-    """
-    full_number = f"{phone_country_code}{phone_number}"
-    print(f"--- LOCAL DEV FALLBACK: SMS OTP FOR {full_number} IS [{code}] ---")
-    # TODO: Add Twilio logic here
-
 @router.post("/signup", response_model=Token)
 async def sign_up(user_in: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user_in.email).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="User already exists")
     
     hashed_password = get_password_hash(user_in.password)
-    
     email_code = generate_otp()
     
     new_user = User(
@@ -74,29 +65,22 @@ async def sign_up(user_in: UserCreate, db: Session = Depends(get_db)):
         last_name=user_in.last_name,
         middle_name=user_in.middle_name,
         suffix=user_in.suffix,
+        business_id=user_in.business_id,
+        
         phone_country_code=user_in.phone_country_code,
         phone_number=user_in.phone_number,
         
-        # Explicitly Unverified
         is_email_verified=False, 
         is_phone_verified=False,
         
         email_verification_code=email_code,
-        email_verification_code_expires=datetime.now(timezone.utc) + timedelta(minutes=15)
+        email_verification_code_expires=datetime.utcnow() + timedelta(minutes=15)
     )
-    
-    # If they provided a phone number at signup, generate a code for that too
-    if user_in.phone_number:
-        phone_code = generate_otp()
-        new_user.phone_verification_code = phone_code
-        new_user.phone_verification_code_expires = datetime.now(timezone.utc) + timedelta(minutes=15)
-        send_otp_sms(user_in.phone_country_code, user_in.phone_number, phone_code)
     
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     
-    # Send Email
     send_otp_email(new_user.email, email_code, purpose="verification")
     
     access_token = create_access_token(
@@ -105,16 +89,51 @@ async def sign_up(user_in: UserCreate, db: Session = Depends(get_db)):
     )
     return {"access_token": access_token, "token_type": "bearer", "email": new_user.email, "status_code": 200}
 
+@router.post("/login", response_model=Token)
+async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user_credentials.email).first()
+    
+    # Catch: Email doesn't exist
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # Catch: Email exists, wrong password
+    if not verify_password(user_credentials.password, db_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+        
+    # Catch: Valid credentials, but unverified email
+    if not db_user.is_email_verified:
+        # Generate fresh OTP and send
+        new_code = generate_otp()
+        db_user.email_verification_code = new_code
+        db_user.email_verification_code_expires = datetime.utcnow() + timedelta(minutes=15)
+        db.commit()
+        send_otp_email(db_user.email, new_code, purpose="verification")
+        
+        raise HTTPException(status_code=403, detail="UNVERIFIED_EMAIL")
+        
+    # Proceed to successful login
+    access_token = create_access_token(
+        data={"sub": db_user.email}, 
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return {"access_token": access_token, "token_type": "bearer", "email": db_user.email, "status_code": 200}
+
 @router.post("/verify-email")
 async def verify_email(req: VerifyEmailOTP, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email).first()
     if not user: raise HTTPException(status_code=404, detail="User not found.")
     if user.is_email_verified: return {"message": "Email is already verified.", "status_code": 200}
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     if not user.email_verification_code or user.email_verification_code != req.code:
         raise HTTPException(status_code=400, detail="Invalid verification code.")
-    if not user.email_verification_code_expires or user.email_verification_code_expires < now:
+        
+    expires = user.email_verification_code_expires
+    if expires and expires.tzinfo:
+        expires = expires.replace(tzinfo=None)
+        
+    if not expires or expires < now:
         raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
         
     user.is_email_verified = True
@@ -122,24 +141,6 @@ async def verify_email(req: VerifyEmailOTP, db: Session = Depends(get_db)):
     user.email_verification_code_expires = None
     db.commit()
     return {"message": "Email verified successfully.", "status_code": 200}
-
-@router.post("/verify-phone")
-async def verify_phone(req: VerifyPhoneOTP, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
-    if not user: raise HTTPException(status_code=404, detail="User not found.")
-    if user.is_phone_verified: return {"message": "Phone is already verified.", "status_code": 200}
-
-    now = datetime.now(timezone.utc)
-    if not user.phone_verification_code or user.phone_verification_code != req.phone_code:
-        raise HTTPException(status_code=400, detail="Invalid phone verification code.")
-    if not user.phone_verification_code_expires or user.phone_verification_code_expires < now:
-        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
-        
-    user.is_phone_verified = True
-    user.phone_verification_code = None
-    user.phone_verification_code_expires = None
-    db.commit()
-    return {"message": "Phone number verified successfully.", "status_code": 200}
 
 @router.post("/resend-email-verification")
 async def resend_email_verification(req: ResendEmailOTP, db: Session = Depends(get_db)):
@@ -149,48 +150,11 @@ async def resend_email_verification(req: ResendEmailOTP, db: Session = Depends(g
         
     new_code = generate_otp()
     user.email_verification_code = new_code
-    user.email_verification_code_expires = datetime.now(timezone.utc) + timedelta(minutes=15)
+    user.email_verification_code_expires = datetime.utcnow() + timedelta(minutes=15)
     db.commit()
     
     send_otp_email(user.email, new_code, purpose="verification")
     return {"message": "If that email is registered and unverified, a new code has been sent.", "status_code": 200}
-
-@router.post("/resend-phone-verification")
-async def resend_phone_verification(req: ResendPhoneOTP, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
-    if not user or not user.phone_number or user.is_phone_verified:
-        return {"message": "If that phone is registered and unverified, a new code has been sent.", "status_code": 200}
-        
-    new_code = generate_otp()
-    user.phone_verification_code = new_code
-    user.phone_verification_code_expires = datetime.now(timezone.utc) + timedelta(minutes=15)
-    db.commit()
-    
-    send_otp_sms(user.phone_country_code, user.phone_number, new_code)
-    return {"message": "If that phone is registered and unverified, a new code has been sent.", "status_code": 200}
-
-@router.post("/login", response_model=Token)
-async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == user_credentials.email).first()
-    if not db_user or not verify_password(user_credentials.password, db_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
-        
-    access_token = create_access_token(
-        data={"sub": db_user.email}, 
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    return {"access_token": access_token, "token_type": "bearer", "email": db_user.email, "status_code": 200}
-
-@router.post("/swagger-login", response_model=Token, include_in_schema=False)
-async def swagger_login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == form_data.username).first()
-    if not db_user or not verify_password(form_data.password, db_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
-    access_token = create_access_token(
-        data={"sub": db_user.email}, 
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    return {"access_token": access_token, "token_type": "bearer", "email": db_user.email, "status_code": 200}
 
 @router.post("/forgot-password")
 async def forgot_password(req: ForgotPassword, db: Session = Depends(get_db)):
@@ -199,7 +163,7 @@ async def forgot_password(req: ForgotPassword, db: Session = Depends(get_db)):
         
     code = generate_otp()
     user.reset_code = code
-    user.reset_code_expires = datetime.now(timezone.utc) + timedelta(minutes=15)
+    user.reset_code_expires = datetime.utcnow() + timedelta(minutes=15)
     db.commit()
     
     send_otp_email(user.email, code, purpose="password reset")
@@ -209,10 +173,14 @@ async def forgot_password(req: ForgotPassword, db: Session = Depends(get_db)):
 async def reset_password(req: ResetPassword, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email).first()
     if not user or user.reset_code != req.code:
-        raise HTTPException(status_code=400, detail="Invalid email or verification code.")
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
         
-    now = datetime.now(timezone.utc)
-    if not user.reset_code_expires or user.reset_code_expires < now:
+    now = datetime.utcnow()
+    expires = user.reset_code_expires
+    if expires and expires.tzinfo:
+        expires = expires.replace(tzinfo=None)
+        
+    if not expires or expires < now:
         raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
         
     user.hashed_password = get_password_hash(req.new_password)
