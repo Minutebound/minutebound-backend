@@ -1,0 +1,81 @@
+services:
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: travel-backend
+    env_file:
+      - .env.backend 
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=sqlite:///app/data/minutebound_app.db
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - wanderplan-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    container_name: travel-elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - wanderplan-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:alpine
+    container_name: travel-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - wanderplan-network
+    restart: unless-stopped
+
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: redis-insight
+    ports:
+      - "5540:5540"
+    networks:
+      - wanderplan-network
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  sqlite-viz:
+    image: ghcr.io/coleifer/sqlite-web:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/data
+    command: minutebound_app.db # This must match your filename in the /data folder
+    depends_on:
+      - backend
+
+networks:
+  wanderplan-network:
+    name: wanderplan-network 
+    driver: bridge
+
+volumes:
+  es_data:
+    driver: local

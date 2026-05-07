@@ -1,0 +1,31 @@
+[project]
+name = "wanderplan-tests"                                                                                                                                                                                         
+requires-python = ">=3.10"                                                                                                                                                                                          
+   
+[project.optional-dependencies]                                                                                                                                                                                     
+test = [                                                                                                                                                                                                          
+    "pytest",
+    "httpx",
+    "pytest-asyncio",
+    "requests"
+]                                                                                                                                                                                                                   
+   
+[tool.pytest.ini_options]                                                                                                                                                                                           
+testpaths = ["tests"] 
+pythonpath = ["."]
+asyncio_mode = "auto"
+env_files = [
+    "backend/.env"
+]
+
+# Modern, readable list format
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+
+markers = [
+    "smoke: Critical login and auth checkers",
+    "regression: Full testing suite",
+]

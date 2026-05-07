@@ -1,0 +1,62 @@
+# =========================
+# Python & Byte-compiled files
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# =========================
+# Environments & Secrets
+# =========================
+# NEVER commit your secrets to version control
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+env/
+ENV/
+
+# =========================
+# Testing & Coverage
+# =========================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# =========================
+# Project Specific (Wanderplan)
+# =========================
+# Ignore user-uploaded profile pictures but preserve the directory structure
+static/profiles/*
+!static/profiles/.gitkeep
+
+# Ignore locally generated or cached PDF itineraries
+*Itinerary.pdf
+
+# SQLite/Local databases (if used for local testing instead of Postgres)
+*.db
+*.sqlite3
+
+# =========================
+# Logs
+# =========================
+*.log
+pip-log.txt
+
+# =========================
+# OS & IDE Files
+# =========================
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

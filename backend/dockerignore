@@ -1,0 +1,38 @@
+# Python / Byte-compiled / Optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+env/
+.venv/
+Pipfile.lock
+
+# Environment variables
+.env
+.env.*
+
+# Testing and Coverage
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# Git and IDEs
+.git
+.gitignore
+.vscode/
+.idea/
+
+# Docker related (optional, prevents copying the Dockerfile into the image itself)
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Static/Media uploads (if you don't want local test images copied over)
+static/profiles/*
+!static/profiles/.keep
