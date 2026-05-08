@@ -33,6 +33,9 @@ def send_otp_email(to_email: str, code: str, purpose: str = "verification"):
         if purpose == "verification":
             msg['Subject'] = "WanderPlan US - Verify Your Email"
             body = f"Welcome to WanderPlan!\n\nYour email verification code is: {code}\n\nThis code will expire in 15 minutes."
+        elif purpose == "account deletion":
+            msg['Subject'] = "WanderPlan US - Account Deletion Request"
+            body = f"We received a request to delete your account.\n\nYour deletion verification code is: {code}\n\nThis code will expire in 15 minutes. If you did not request this, please secure your account immediately."
         else:
             msg['Subject'] = "WanderPlan US - Password Reset Code"
             body = f"Your password reset code is: {code}\n\nThis code will expire in 15 minutes."
@@ -52,12 +55,43 @@ def send_otp_email(to_email: str, code: str, purpose: str = "verification"):
 @router.post("/signup", response_model=Token)
 async def sign_up(user_in: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user_in.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="User already exists")
     
     hashed_password = get_password_hash(user_in.password)
     email_code = generate_otp()
+
+    if db_user:
+        if db_user.is_active:
+            # Standard conflict error for active accounts
+            raise HTTPException(status_code=400, detail="User already exists")
+        else:
+            # Reactivate soft-deleted account seamlessly
+            db_user.first_name = user_in.first_name
+            db_user.last_name = user_in.last_name
+            db_user.middle_name = user_in.middle_name
+            db_user.suffix = user_in.suffix
+            db_user.business_id = user_in.business_id
+            db_user.phone_country_code = user_in.phone_country_code
+            db_user.phone_number = user_in.phone_number
+            db_user.hashed_password = hashed_password
+            
+            db_user.is_active = True
+            db_user.is_email_verified = False
+            db_user.email_verification_code = email_code
+            db_user.email_verification_code_expires = datetime.utcnow() + timedelta(minutes=15)
+            db_user.deleted_at = None
+            
+            db.commit()
+            db.refresh(db_user)
+            
+            send_otp_email(db_user.email, email_code, purpose="verification")
+            
+            access_token = create_access_token(
+                data={"sub": db_user.email}, 
+                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            )
+            return {"access_token": access_token, "token_type": "bearer", "email": db_user.email, "status_code": 200}
     
+    # Standard creation if totally new
     new_user = User(
         email=user_in.email, 
         hashed_password=hashed_password,
@@ -66,13 +100,10 @@ async def sign_up(user_in: UserCreate, db: Session = Depends(get_db)):
         middle_name=user_in.middle_name,
         suffix=user_in.suffix,
         business_id=user_in.business_id,
-        
         phone_country_code=user_in.phone_country_code,
         phone_number=user_in.phone_number,
-        
         is_email_verified=False, 
         is_phone_verified=False,
-        
         email_verification_code=email_code,
         email_verification_code_expires=datetime.utcnow() + timedelta(minutes=15)
     )
@@ -93,17 +124,14 @@ async def sign_up(user_in: UserCreate, db: Session = Depends(get_db)):
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user_credentials.email).first()
     
-    # Catch: Email doesn't exist
-    if not db_user:
+    # Catch: Email doesn't exist OR is a soft-deleted account
+    if not db_user or not db_user.is_active:
         raise HTTPException(status_code=404, detail="User not found")
         
-    # Catch: Email exists, wrong password
     if not verify_password(user_credentials.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect password")
         
-    # Catch: Valid credentials, but unverified email
     if not db_user.is_email_verified:
-        # Generate fresh OTP and send
         new_code = generate_otp()
         db_user.email_verification_code = new_code
         db_user.email_verification_code_expires = datetime.utcnow() + timedelta(minutes=15)
@@ -112,7 +140,6 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
         
         raise HTTPException(status_code=403, detail="UNVERIFIED_EMAIL")
         
-    # Proceed to successful login
     access_token = create_access_token(
         data={"sub": db_user.email}, 
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -122,7 +149,7 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
 @router.post("/verify-email")
 async def verify_email(req: VerifyEmailOTP, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email).first()
-    if not user: raise HTTPException(status_code=404, detail="User not found.")
+    if not user or not user.is_active: raise HTTPException(status_code=404, detail="User not found.")
     if user.is_email_verified: return {"message": "Email is already verified.", "status_code": 200}
 
     now = datetime.utcnow()
@@ -145,7 +172,7 @@ async def verify_email(req: VerifyEmailOTP, db: Session = Depends(get_db)):
 @router.post("/resend-email-verification")
 async def resend_email_verification(req: ResendEmailOTP, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email).first()
-    if not user or user.is_email_verified: 
+    if not user or not user.is_active or user.is_email_verified: 
         return {"message": "If that email is registered and unverified, a new code has been sent.", "status_code": 200}
         
     new_code = generate_otp()
@@ -159,7 +186,7 @@ async def resend_email_verification(req: ResendEmailOTP, db: Session = Depends(g
 @router.post("/forgot-password")
 async def forgot_password(req: ForgotPassword, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email).first()
-    if not user: return {"message": "If that email is registered, a reset code has been sent.", "status_code": 200}
+    if not user or not user.is_active: return {"message": "If that email is registered, a reset code has been sent.", "status_code": 200}
         
     code = generate_otp()
     user.reset_code = code
@@ -172,7 +199,7 @@ async def forgot_password(req: ForgotPassword, db: Session = Depends(get_db)):
 @router.post("/reset-password")
 async def reset_password(req: ResetPassword, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email).first()
-    if not user or user.reset_code != req.code:
+    if not user or not user.is_active or user.reset_code != req.code:
         raise HTTPException(status_code=400, detail="Invalid verification code.")
         
     now = datetime.utcnow()
