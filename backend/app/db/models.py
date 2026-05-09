@@ -3,8 +3,9 @@ import enum
 import random
 import string
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Integer, Enum, JSON
+from sqlalchemy import Column, Boolean, Integer, String, Float, ForeignKey, DateTime, Text, Enum as SQLEnum, JSON
 from sqlalchemy.orm import relationship
+from app.core.enums import PlaceType, EventCategory, GenderEnum, UserRole, DevicePlatform, VisibilityEnum, BookingType, BookingStatus
 from app.db.database import Base
 
 def generate_travel_id():
@@ -12,30 +13,67 @@ def generate_travel_id():
     chars = string.ascii_uppercase + string.digits
     return "#" + ''.join(random.choices(chars, k=7))
 
-class GenderEnum(str, enum.Enum):
-    MALE = "MALE"
-    FEMALE = "FEMALE"
-    NON_BINARY = "NON_BINARY"
-    PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY"
-    OTHER = "OTHER"
+# --- DATABASE MODELS ---
+#Destination Model
+class Destination(Base):
+    __tablename__ = "destinations"
 
-class VisibilityEnum(str, enum.Enum):
-    PRIVATE = "PRIVATE"
-    SHARED = "SHARED"
-    PUBLIC = "PUBLIC"
+    id = Column(Integer, primary_key=True, index=True)
+    osm_id = Column(String, index=True, nullable=True) # OpenStreetMap ID
+    name = Column(String, index=True, nullable=False)
+    
+    # OSM Place Classification
+    place_type = Column(SQLEnum(PlaceType), nullable=False)
+    
+    # Geographic Data
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    
+    # US Specific Hierarchies
+    state_code = Column(String(2), index=True, nullable=True)
+    county = Column(String, index=True, nullable=True)
+    country_code = Column(String(2), default="US")
+    
+    # Metadata
+    population = Column(Integer, nullable=True)
+    description = Column(Text, nullable=True)
+    image_url = Column(String, nullable=True)
 
-class UserRole(str, enum.Enum):
-    USER = "USER"
-    SUPPORT = "SUPPORT"
-    ADMIN = "ADMIN"
-    SUPER_ADMIN = "SUPER_ADMIN"
+    # Relationships
+    events = relationship("Event", back_populates="destination", cascade="all, delete-orphan")
 
-class DevicePlatform(str, enum.Enum):
-    WEB = "WEB"
-    IOS = "IOS"
-    ANDROID = "ANDROID"
-    UNKNOWN = "UNKNOWN"
+#Event Model
+class Event(Base):
+    __tablename__ = "events"
 
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Categorization
+    category = Column(SQLEnum(EventCategory), index=True, nullable=False)
+    
+    # Timing
+    start_time = Column(DateTime, nullable=False, index=True)
+    end_time = Column(DateTime, nullable=True)
+    
+    # Location
+    destination_id = Column(Integer, ForeignKey("destinations.id"), nullable=False)
+    address = Column(String, nullable=True)
+    venue_name = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    
+    # Ticketing & Media
+    price_min = Column(Float, nullable=True)
+    price_max = Column(Float, nullable=True)
+    ticket_url = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
+
+    # Relationships
+    destination = relationship("Destination", back_populates="events")
+
+#User Model
 class User(Base):
     __tablename__ = "users"
 
@@ -52,7 +90,7 @@ class User(Base):
     last_name = Column(String(100), nullable=False)
     suffix = Column(String(20), nullable=True)
     profile_picture_url = Column(String, nullable=True)
-    gender = Column(Enum(GenderEnum), default=GenderEnum.PREFER_NOT_TO_SAY, nullable=True)
+    gender = Column(SQLEnum(GenderEnum), default=GenderEnum.PREFER_NOT_TO_SAY, nullable=True)
 
     # --- CONTACT INFORMATION ---
     email = Column(String(255), unique=True, index=True, nullable=False)
@@ -65,7 +103,7 @@ class User(Base):
 
     # --- SECURITY & AUTHENTICATION ---
     hashed_password = Column(String(255), nullable=False)
-    role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
+    role = Column(SQLEnum(UserRole), default=UserRole.USER, nullable=False)
     is_active = Column(Boolean, default=True)
     is_locked = Column(Boolean, default=False)
     failed_login_attempts = Column(Integer, default=0)
@@ -91,18 +129,19 @@ class User(Base):
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
-    # --- RELATIONS (UPDATED FOR ITINERARIES) ---
+    # --- RELATIONS ---
     itineraries = relationship("SavedItinerary", back_populates="owner", cascade="all, delete-orphan")
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    bookings = relationship("Booking", back_populates="user", cascade="all, delete-orphan")
 
-# --- REPLACED SavedTrip WITH SavedItinerary ---
+#Saved Itinerary Model
 class SavedItinerary(Base):
     __tablename__ = "saved_itineraries"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     destination = Column(String(255), index=True)
     data = Column(JSON, nullable=False, default=dict) 
-    visibility = Column(Enum(VisibilityEnum), default=VisibilityEnum.PRIVATE, nullable=False)
+    visibility = Column(SQLEnum(VisibilityEnum), default=VisibilityEnum.PRIVATE, nullable=False)
     
     # share_token acts as the unique link identifier for SHARED/PUBLIC itineraries
     share_token = Column(String(64), unique=True, index=True, nullable=True)
@@ -113,6 +152,38 @@ class SavedItinerary(Base):
     
     owner = relationship("User", back_populates="itineraries")
 
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, Enum as SQLEnum
+from sqlalchemy.orm import relationship
+
+from app.core.enums import BookingStatus, BookingType
+from app.db.database import Base
+
+#Booking Model
+class Booking(Base):
+    __tablename__ = "bookings"
+
+    # Primary Keys & Foreign Keys
+    id = Column(Integer, index=True, primary_key=True)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=True)
+    trip_id = Column(Integer, ForeignKey("saved_itineraries.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Core Details
+    booking_type = Column(SQLEnum(BookingType), index=True, nullable=False)
+    confirmation_code = Column(String, nullable=True)
+    end_date = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    provider_name = Column(String, nullable=False)
+    start_date = Column(DateTime, nullable=False)
+    status = Column(SQLEnum(BookingStatus), default=BookingStatus.PENDING, index=True)
+    total_price = Column(Float, nullable=False)
+
+    # Relationships (Alphabetized)
+    event = relationship("Event", back_populates="bookings")
+    trip = relationship("SavedItinerary", back_populates="bookings")
+    user = relationship("User", back_populates="bookings")
+
+#System Health Status Model
 class SystemHealthStatus(Base):
     __tablename__ = "system_health_status"
     id = Column(Integer, primary_key=True, index=True)
@@ -123,13 +194,14 @@ class SystemHealthStatus(Base):
     status_description = Column(String, nullable=True)
     last_checked = Column(DateTime(timezone=True), nullable=True)
 
+#User Session
 class UserSession(Base):
     __tablename__ = "user_sessions"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     ip_address = Column(String(50), nullable=True) 
     user_agent = Column(String(255), nullable=True)
-    platform = Column(Enum(DevicePlatform), default=DevicePlatform.UNKNOWN)
+    platform = Column(SQLEnum(DevicePlatform), default=DevicePlatform.UNKNOWN)
     started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     last_activity_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     ended_at = Column(DateTime(timezone=True), nullable=True)
@@ -137,6 +209,7 @@ class UserSession(Base):
     user = relationship("User", back_populates="sessions")
     events = relationship("UserEvent", back_populates="session", cascade="all, delete-orphan")
 
+#User Event Model
 class UserEvent(Base):
     __tablename__ = "user_events"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -148,3 +221,4 @@ class UserEvent(Base):
     page_url = Column(String(255), nullable=True) 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     session = relationship("UserSession", back_populates="events")
+

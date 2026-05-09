@@ -222,3 +222,25 @@ async def reset_password(req: ResetPassword, db: Session = Depends(get_db)):
     user.reset_code_expires = None
     db.commit()
     return {"message": "Password reset successfully. You can now log in.", "status_code": 200}
+
+@router.post("/swagger-login")
+async def swagger_login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """
+    Dedicated login endpoint specifically for Swagger UI authentication.
+    Swagger UI sends form data with 'username' and 'password'. 
+    We treat 'username' as the 'email' for this application.
+    """
+    db_user = db.query(User).filter(User.email == form_data.username).first()
+    
+    if not db_user or not db_user.is_active:
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+        
+    if not verify_password(form_data.password, db_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+        
+    # Swagger UI strictly expects the response to have 'access_token' and 'token_type'
+    access_token = create_access_token(
+        data={"sub": db_user.email}, 
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
