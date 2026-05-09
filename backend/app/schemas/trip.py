@@ -1,6 +1,15 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Any, Dict
+from datetime import datetime
+from enum import Enum as PyEnum
 
+# Enum for API validation to match the database
+class VisibilityEnum(str, PyEnum):
+    PRIVATE = "PRIVATE"
+    SHARED = "SHARED"
+    PUBLIC = "PUBLIC"
+
+# --- EXISTING TRIP GENERATION SCHEMA ---
 class TripGenerateRequest(BaseModel):
     username: str
     destination: str
@@ -15,3 +24,37 @@ class TripGenerateRequest(BaseModel):
     weather: Optional[Dict[str, Any]] = None
     activities: Optional[List[Dict[str, Any]]] = []
     attractions: Optional[List[Dict[str, Any]]] = []
+
+# --- NEW STANDARD ITINERARY SCHEMAS ---
+
+class ItineraryBase(BaseModel):
+    destination: str
+    data: Dict[str, Any]
+    visibility: VisibilityEnum = VisibilityEnum.PRIVATE
+
+class ItineraryCreate(ItineraryBase):
+    pass
+
+class ItineraryUpdate(BaseModel):
+    destination: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    visibility: Optional[VisibilityEnum] = None
+
+class ItineraryResponse(ItineraryBase):
+    id: str
+    user_id: str
+    share_token: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# --- SHARING SCHEMAS ---
+
+class UpdateVisibilityRequest(BaseModel):
+    visibility: VisibilityEnum
+
+class ShareItineraryEmailRequest(BaseModel):
+    email: EmailStr
+    message: Optional[str] = Field(None, max_length=500, description="Optional personal message to include in the email")

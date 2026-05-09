@@ -74,6 +74,9 @@ async def sign_up(user_in: UserCreate, db: Session = Depends(get_db)):
             db_user.phone_number = user_in.phone_number
             db_user.hashed_password = hashed_password
             
+            # --- ADDED GENDER HERE ---
+            db_user.gender = user_in.gender 
+            
             db_user.is_active = True
             db_user.is_email_verified = False
             db_user.email_verification_code = email_code
@@ -102,6 +105,10 @@ async def sign_up(user_in: UserCreate, db: Session = Depends(get_db)):
         business_id=user_in.business_id,
         phone_country_code=user_in.phone_country_code,
         phone_number=user_in.phone_number,
+        
+        # --- ADDED GENDER HERE ---
+        gender=user_in.gender,
+        
         is_email_verified=False, 
         is_phone_verified=False,
         email_verification_code=email_code,

@@ -1,4 +1,13 @@
 from pydantic import BaseModel, EmailStr, Field
+from enum import Enum as PyEnum
+
+# Replicate the Enum in schemas for validation
+class GenderEnum(str, PyEnum):
+    MALE = "MALE"
+    FEMALE = "FEMALE"
+    NON_BINARY = "NON_BINARY"
+    PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY"
+    OTHER = "OTHER"
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -7,7 +16,11 @@ class UserCreate(BaseModel):
     last_name: str = Field(..., max_length=100)
     middle_name: str | None = Field(None, max_length=100)
     suffix: str | None = Field(None, max_length=20)
-    business_id: str | None = Field(None, max_length=36) # Added to schema
+    business_id: str | None = Field(None, max_length=36)
+    
+    # --- ADDED GENDER FIELD ---
+    gender: GenderEnum | None = Field(default=GenderEnum.PREFER_NOT_TO_SAY)
+
     # Optional phone at signup
     phone_country_code: str | None = Field(None, pattern=r"^\+\d{1,4}$") 
     phone_number: str | None = Field(None, min_length=7, max_length=20)

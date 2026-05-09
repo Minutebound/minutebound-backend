@@ -12,6 +12,13 @@ def generate_travel_id():
     chars = string.ascii_uppercase + string.digits
     return "#" + ''.join(random.choices(chars, k=7))
 
+class GenderEnum(str, enum.Enum):
+    MALE = "MALE"
+    FEMALE = "FEMALE"
+    NON_BINARY = "NON_BINARY"
+    PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY"
+    OTHER = "OTHER"
+
 class VisibilityEnum(str, enum.Enum):
     PRIVATE = "PRIVATE"
     SHARED = "SHARED"
@@ -36,7 +43,7 @@ class User(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
 
     # --- BUSINESS / TRAVEL IDENTITY ---
-    business_id = Column(String(36), nullable=True, index=True) # Future-proofing for business travel
+    business_id = Column(String(36), nullable=True, index=True) 
     unique_travel_id = Column(String(8), unique=True, index=True, default=generate_travel_id, nullable=False)
 
     # --- PERSONAL IDENTITY ---
@@ -45,6 +52,7 @@ class User(Base):
     last_name = Column(String(100), nullable=False)
     suffix = Column(String(20), nullable=True)
     profile_picture_url = Column(String, nullable=True)
+    gender = Column(Enum(GenderEnum), default=GenderEnum.PREFER_NOT_TO_SAY, nullable=True)
 
     # --- CONTACT INFORMATION ---
     email = Column(String(255), unique=True, index=True, nullable=False)
@@ -83,22 +91,27 @@ class User(Base):
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
-    # --- RELATIONS ---
-    trips = relationship("SavedTrip", back_populates="owner", cascade="all, delete-orphan")
+    # --- RELATIONS (UPDATED FOR ITINERARIES) ---
+    itineraries = relationship("SavedItinerary", back_populates="owner", cascade="all, delete-orphan")
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
 
-class SavedTrip(Base):
-    __tablename__ = "saved_trips"
+# --- REPLACED SavedTrip WITH SavedItinerary ---
+class SavedItinerary(Base):
+    __tablename__ = "saved_itineraries"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     destination = Column(String(255), index=True)
     data = Column(JSON, nullable=False, default=dict) 
     visibility = Column(Enum(VisibilityEnum), default=VisibilityEnum.PRIVATE, nullable=False)
+    
+    # share_token acts as the unique link identifier for SHARED/PUBLIC itineraries
     share_token = Column(String(64), unique=True, index=True, nullable=True)
+    
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    owner = relationship("User", back_populates="trips")
+    
+    owner = relationship("User", back_populates="itineraries")
 
 class SystemHealthStatus(Base):
     __tablename__ = "system_health_status"

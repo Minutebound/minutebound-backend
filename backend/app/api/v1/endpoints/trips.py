@@ -1,4 +1,5 @@
 import json
+import secrets
 from fastapi import APIRouter, Depends, Response, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
@@ -6,9 +7,17 @@ from fpdf import FPDF
 from datetime import datetime
 
 from app.db.database import get_db
-from app.db.models import User, SavedTrip
+from app.db.models import User, SavedItinerary, VisibilityEnum
 from app.api.v1.deps import get_current_user
-from app.schemas.trip import TripGenerateRequest
+
+# Import the new schemas we created in Step 2
+from app.schemas.trip import (
+    TripGenerateRequest, 
+    ItineraryCreate, 
+    ItineraryResponse, 
+    UpdateVisibilityRequest, 
+    ShareItineraryEmailRequest
+)
 
 import smtplib
 from email.message import EmailMessage
@@ -16,6 +25,7 @@ from app.core.config import settings
 
 router = APIRouter()
 
+# --- HELPER FUNCTIONS (Kept from original) ---
 def sanitize_text(text) -> str:
     if text is None:
         return ""
@@ -154,7 +164,6 @@ def build_pdf_content(payload_dict: dict) -> bytes:
     return bytes(pdf.output())
 
 def send_background_trip_email(user_email: str, user_name: str, destination: str, trip_data: dict):
-    """Helper function to send the saved trip email in the background"""
     try:
         pdf_bytes = build_pdf_content(trip_data)
         msg = EmailMessage()
@@ -172,6 +181,8 @@ def send_background_trip_email(user_email: str, user_name: str, destination: str
     except Exception as e:
         print(f"Background email error: {e}")
 
+# --- API ENDPOINTS ---
+
 @router.post("/generate-pdf")
 async def generate_trip_pdf(payload: TripGenerateRequest):
     try:
@@ -185,64 +196,135 @@ async def generate_trip_pdf(payload: TripGenerateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF Generation Failed: {str(e)}")
 
-@router.post("/share-pdf")
-async def share_trip_pdf(payload: TripGenerateRequest):
-    if not payload.email:
-        raise HTTPException(status_code=400, detail="Email is required")
-    try:
-        pdf_bytes = build_pdf_content(payload.model_dump())
-        msg = EmailMessage()
-        msg['Subject'] = f"Itinerary: {payload.destination}"
-        msg['From'] = settings.FROM_EMAIL
-        msg['To'] = payload.email
-        msg.set_content(f"Hi {payload.username},\n\nAttached is your trip itinerary.\n\nSafe travels!")
-        msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename="Itinerary.pdf")
-        
-        with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
-            server.starttls()
-            server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-            server.send_message(msg)
-        return {"message": "Email sent successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to send email")
-
-@router.post("/save")
-async def save_trip(
-    payload: dict, 
-    background_tasks: BackgroundTasks, # Injected BackgroundTasks
+@router.post("/save", response_model=ItineraryResponse)
+async def save_itinerary(
+    payload: ItineraryCreate, 
+    background_tasks: BackgroundTasks, 
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    existing = db.query(SavedTrip).filter(SavedTrip.user_id == current_user.id).all()
+    # Check for exact duplicate data to prevent spamming save
+    existing = db.query(SavedItinerary).filter(SavedItinerary.user_id == current_user.id).all()
     for trip in existing:
-        if trip.data == payload: return {"message": "Trip already saved!"}
-        
-    new_trip = SavedTrip(destination=payload.get("destination", "My Trip"), data=payload, user_id=current_user.id)
-    db.add(new_trip)
-    db.commit()
-    db.refresh(new_trip)
+        if trip.data == payload.data: 
+            return trip # Return existing if data matches
+            
+    # Generate a share token immediately if they saved it as non-private
+    token = secrets.token_urlsafe(16) if payload.visibility != VisibilityEnum.PRIVATE else None
 
-    # Replaced Pub/Sub block with FastAPI BackgroundTasks for local email delivery
+    new_itinerary = SavedItinerary(
+        destination=payload.destination, 
+        data=payload.data, 
+        visibility=payload.visibility,
+        share_token=token,
+        user_id=current_user.id
+    )
+    db.add(new_itinerary)
+    db.commit()
+    db.refresh(new_itinerary)
+
     user_full_name = f"{current_user.first_name} {current_user.last_name}".strip()
     background_tasks.add_task(
         send_background_trip_email,
         user_email=current_user.email,
         user_name=user_full_name,
-        destination=new_trip.destination,
-        trip_data=payload
+        destination=new_itinerary.destination,
+        trip_data=payload.data
     )
 
-    return {"message": "Trip saved successfully", "trip_id": str(new_trip.id)}
+    return new_itinerary
 
-@router.get("/me", response_model=List[dict])
-async def get_my_trips(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    trips = db.query(SavedTrip).filter(SavedTrip.user_id == current_user.id).all()
-    return [{"id": str(t.id), "destination": t.destination, "data": t.data} for t in trips]
+@router.get("/me", response_model=List[ItineraryResponse])
+async def get_my_itineraries(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(SavedItinerary).filter(SavedItinerary.user_id == current_user.id).all()
 
-@router.delete("/{trip_id}")
-async def delete_trip(trip_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    trip = db.query(SavedTrip).filter(SavedTrip.id == trip_id, SavedTrip.user_id == current_user.id).first()
-    if not trip: raise HTTPException(status_code=404, detail="Trip not found")
-    db.delete(trip)
+@router.delete("/{itinerary_id}")
+async def delete_itinerary(itinerary_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    itinerary = db.query(SavedItinerary).filter(SavedItinerary.id == itinerary_id, SavedItinerary.user_id == current_user.id).first()
+    if not itinerary: 
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+    db.delete(itinerary)
     db.commit()
-    return {"message": "Trip deleted successfully"}
+    return {"message": "Itinerary deleted successfully"}
+
+
+# --- NEW VISIBILITY & SHARING ENDPOINTS ---
+
+@router.patch("/{itinerary_id}/visibility", response_model=ItineraryResponse)
+async def update_itinerary_visibility(
+    itinerary_id: str,
+    payload: UpdateVisibilityRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Allows a user to change their itinerary from PRIVATE to SHARED/PUBLIC"""
+    itinerary = db.query(SavedItinerary).filter(SavedItinerary.id == itinerary_id, SavedItinerary.user_id == current_user.id).first()
+    if not itinerary:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+    
+    itinerary.visibility = payload.visibility
+    
+    # Ensure they have a share token if it's no longer private
+    if payload.visibility != VisibilityEnum.PRIVATE and not itinerary.share_token:
+        itinerary.share_token = secrets.token_urlsafe(16)
+        
+    db.commit()
+    db.refresh(itinerary)
+    return itinerary
+
+@router.get("/shared/{share_token}", response_model=ItineraryResponse)
+async def get_shared_itinerary(share_token: str, db: Session = Depends(get_db)):
+    """Public endpoint to fetch an itinerary if you have the secure link"""
+    itinerary = db.query(SavedItinerary).filter(SavedItinerary.share_token == share_token).first()
+    if not itinerary:
+        raise HTTPException(status_code=404, detail="Shared itinerary not found")
+    
+    if itinerary.visibility == VisibilityEnum.PRIVATE:
+        raise HTTPException(status_code=403, detail="This itinerary is no longer public")
+        
+    return itinerary
+
+@router.post("/{itinerary_id}/share-email")
+async def email_shared_itinerary(
+    itinerary_id: str,
+    payload: ShareItineraryEmailRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Emails the itinerary PDF and an optional personal message to a friend"""
+    itinerary = db.query(SavedItinerary).filter(SavedItinerary.id == itinerary_id, SavedItinerary.user_id == current_user.id).first()
+    if not itinerary:
+        raise HTTPException(status_code=404, detail="Itinerary not found")
+
+    def send_friend_email():
+        try:
+            pdf_bytes = build_pdf_content(itinerary.data)
+            msg = EmailMessage()
+            msg['Subject'] = f"{current_user.first_name} shared an itinerary to {itinerary.destination} with you!"
+            msg['From'] = settings.FROM_EMAIL
+            msg['To'] = payload.email
+            
+            # Construct body
+            body = f"Hi there,\n\n{current_user.first_name} {current_user.last_name} thought you'd like to see their itinerary for {itinerary.destination}.\n"
+            if payload.message:
+                body += f"\nThey included a message:\n\"{payload.message}\"\n"
+            
+            # If public, add a link to view online
+            if itinerary.visibility != VisibilityEnum.PRIVATE and itinerary.share_token:
+                frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+                body += f"\nYou can view the full interactive trip online here:\n{frontend_url}/shared/{itinerary.share_token}\n"
+                
+            body += "\nSafe travels!\nThe minutebound Team"
+            msg.set_content(body)
+            msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=f"{itinerary.destination}_Itinerary.pdf")
+            
+            with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
+                server.starttls()
+                server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+                server.send_message(msg)
+        except Exception as e:
+            print(f"Share email error: {e}")
+
+    background_tasks.add_task(send_friend_email)
+    return {"message": f"Itinerary sent to {payload.email}"}
