@@ -10,15 +10,13 @@ from app.db.database import get_db
 from app.db.models import User, SavedItinerary, VisibilityEnum
 from app.api.v1.deps import get_current_user
 
-# Import the new schemas we created in Step 2
-from app.schemas.trip import (
-    TripGenerateRequest, 
+from app.schemas.itinerary import (
+    ItineraryGenerateRequest, 
     ItineraryCreate, 
     ItineraryResponse, 
     UpdateVisibilityRequest, 
     ShareItineraryEmailRequest
 )
-
 import smtplib
 from email.message import EmailMessage
 from app.core.config import settings
@@ -184,7 +182,7 @@ def send_background_trip_email(user_email: str, user_name: str, destination: str
 # --- API ENDPOINTS ---
 
 @router.post("/generate-pdf")
-async def generate_trip_pdf(payload: TripGenerateRequest):
+async def generate_itinerary_pdf(payload: ItineraryGenerateRequest):
     try:
         pdf_bytes = build_pdf_content(payload.model_dump())
         safe_name = "".join(x for x in payload.destination if x.isalnum()) or "Itinerary"
@@ -205,9 +203,9 @@ async def save_itinerary(
 ):
     # Check for exact duplicate data to prevent spamming save
     existing = db.query(SavedItinerary).filter(SavedItinerary.user_id == current_user.id).all()
-    for trip in existing:
-        if trip.data == payload.data: 
-            return trip # Return existing if data matches
+    for itinerary in existing:
+        if itinerary.data == payload.data: 
+            return itinerary # Return existing if data matches
             
     # Generate a share token immediately if they saved it as non-private
     token = secrets.token_urlsafe(16) if payload.visibility != VisibilityEnum.PRIVATE else None
@@ -257,7 +255,7 @@ async def update_itinerary_visibility(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Allows a user to change their itinerary from PRIVATE to SHARED/PUBLIC"""
+    """Allows a user to change their itinerary from PRIVATE to PUBLIC"""
     itinerary = db.query(SavedItinerary).filter(SavedItinerary.id == itinerary_id, SavedItinerary.user_id == current_user.id).first()
     if not itinerary:
         raise HTTPException(status_code=404, detail="Itinerary not found")

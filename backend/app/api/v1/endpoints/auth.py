@@ -31,13 +31,13 @@ def send_otp_email(to_email: str, code: str, purpose: str = "verification"):
         msg['To'] = to_email
         
         if purpose == "verification":
-            msg['Subject'] = "WanderPlan US - Verify Your Email"
-            body = f"Welcome to WanderPlan!\n\nYour email verification code is: {code}\n\nThis code will expire in 15 minutes."
+            msg['Subject'] = "MinuteBound US - Verify Your Email"
+            body = f"Welcome to MinuteBound!\n\nYour email verification code is: {code}\n\nThis code will expire in 15 minutes."
         elif purpose == "account deletion":
-            msg['Subject'] = "WanderPlan US - Account Deletion Request"
+            msg['Subject'] = "MinuteBound US - Account Deletion Request"
             body = f"We received a request to delete your account.\n\nYour deletion verification code is: {code}\n\nThis code will expire in 15 minutes. If you did not request this, please secure your account immediately."
         else:
-            msg['Subject'] = "WanderPlan US - Password Reset Code"
+            msg['Subject'] = "MinuteBound US - Password Reset Code"
             body = f"Your password reset code is: {code}\n\nThis code will expire in 15 minutes."
             
         msg.attach(MIMEText(body, 'plain'))

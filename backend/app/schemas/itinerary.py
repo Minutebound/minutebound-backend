@@ -6,11 +6,9 @@ from enum import Enum as PyEnum
 # Enum for API validation to match the database
 class VisibilityEnum(str, PyEnum):
     PRIVATE = "PRIVATE"
-    SHARED = "SHARED"
     PUBLIC = "PUBLIC"
 
-# --- EXISTING TRIP GENERATION SCHEMA ---
-class TripGenerateRequest(BaseModel):
+class ItineraryGenerateRequest(BaseModel):
     username: str
     destination: str
     check_in_date: str
@@ -24,8 +22,6 @@ class TripGenerateRequest(BaseModel):
     weather: Optional[Dict[str, Any]] = None
     activities: Optional[List[Dict[str, Any]]] = []
     attractions: Optional[List[Dict[str, Any]]] = []
-
-# --- NEW STANDARD ITINERARY SCHEMAS ---
 
 class ItineraryBase(BaseModel):
     destination: str

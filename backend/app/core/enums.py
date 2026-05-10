@@ -14,7 +14,6 @@ class GenderEnum(str, enum.Enum):
 
 class VisibilityEnum(str, enum.Enum):
     PRIVATE = "PRIVATE"
-    SHARED = "SHARED"
     PUBLIC = "PUBLIC"
 
     @classmethod

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles 
 from app.core.config import settings
 from app.db.database import engine, Base, SessionLocal 
-from app.api.v1.endpoints import activities, admin, analytics, attractions, auth, chatbot, destinations, driving, events, flights, health, hotels, locations, trips, users, weather
+from app.api.v1.endpoints import activities, admin, analytics, attractions, auth, chatbot, destinations, driving, events, flights, health, hotels, itineraries,locations, users, weather
 from app.services.health_service import health_service
 
 from fastapi_cache import FastAPICache
@@ -73,7 +73,7 @@ def get_application():
     _app.include_router(weather.router, prefix="/api/v1/weather", tags=["weather"])
 
     _app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-    _app.include_router(trips.router, prefix="/api/v1/trips", tags=["trips"])
+    _app.include_router(itineraries.router, prefix="/api/v1/itineraries", tags=["itineraries"])
     _app.include_router(users.router, prefix="/api/v1/users", tags=["users"]) 
     _app.include_router(chatbot.router, prefix="/api/v1/chatbot", tags=["chatbot"])
     _app.include_router(health.router, prefix="/api/v1/health", tags=["health"])

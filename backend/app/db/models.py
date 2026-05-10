@@ -41,7 +41,7 @@ class Destination(Base):
 
     # Relationships
     events = relationship("Event", back_populates="destination", cascade="all, delete-orphan")
-
+    
 #Event Model
 class Event(Base):
     __tablename__ = "events"
@@ -72,6 +72,7 @@ class Event(Base):
 
     # Relationships
     destination = relationship("Destination", back_populates="events")
+    bookings = relationship("Booking", back_populates="event", cascade="all, delete-orphan")
 
 #User Model
 class User(Base):
@@ -142,21 +143,14 @@ class SavedItinerary(Base):
     destination = Column(String(255), index=True)
     data = Column(JSON, nullable=False, default=dict) 
     visibility = Column(SQLEnum(VisibilityEnum), default=VisibilityEnum.PRIVATE, nullable=False)
-    
-    # share_token acts as the unique link identifier for SHARED/PUBLIC itineraries
     share_token = Column(String(64), unique=True, index=True, nullable=True)
-    
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     
     owner = relationship("User", back_populates="itineraries")
-
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, Enum as SQLEnum
-from sqlalchemy.orm import relationship
-
-from app.core.enums import BookingStatus, BookingType
-from app.db.database import Base
+    # Add/Update the reverse relationship to point to "itinerary"
+    bookings = relationship("Booking", back_populates="itinerary", cascade="all, delete-orphan")
 
 #Booking Model
 class Booking(Base):
@@ -165,8 +159,10 @@ class Booking(Base):
     # Primary Keys & Foreign Keys
     id = Column(Integer, index=True, primary_key=True)
     event_id = Column(Integer, ForeignKey("events.id"), nullable=True)
-    trip_id = Column(Integer, ForeignKey("saved_itineraries.id"), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False) # Changed to String(36) to match User.id
+    
+    # RENAMED and FIXED TYPE (SavedItinerary uses String(36) UUIDs, not Integers)
+    itinerary_id = Column(String(36), ForeignKey("saved_itineraries.id"), nullable=True) 
 
     # Core Details
     booking_type = Column(SQLEnum(BookingType), index=True, nullable=False)
@@ -178,10 +174,12 @@ class Booking(Base):
     status = Column(SQLEnum(BookingStatus), default=BookingStatus.PENDING, index=True)
     total_price = Column(Float, nullable=False)
 
-    # Relationships (Alphabetized)
+    # Relationships
     event = relationship("Event", back_populates="bookings")
-    trip = relationship("SavedItinerary", back_populates="bookings")
     user = relationship("User", back_populates="bookings")
+    
+    # RENAMED from `trip` to `itinerary`
+    itinerary = relationship("SavedItinerary", back_populates="bookings")
 
 #System Health Status Model
 class SystemHealthStatus(Base):

@@ -181,7 +181,7 @@ async def search_locations(keyword: str):
             if city and needle in city.lower().replace(" ", ""):
                 results.append({"city": city.title(), "state": resolve_state(sc)})
     except Exception as e:
-        print(f"[Search] Amadeus error: {e}")
+        print(f"[Search] error: {e}")
 
     seen: set = set()
     unique: list = []

@@ -1,8 +1,7 @@
+# In backend/app/schemas/booking.py
 from datetime import datetime
 from typing import Optional
-
 from pydantic import BaseModel
-
 from app.core.enums import BookingStatus, BookingType
 
 class BookingBase(BaseModel):
@@ -15,14 +14,16 @@ class BookingBase(BaseModel):
     start_date: datetime
     status: BookingStatus = BookingStatus.PENDING
     total_price: float
-    trip_id: Optional[int] = None
+    
+    # RENAMED to itinerary_id and changed to str (UUID)
+    itinerary_id: Optional[str] = None 
 
 class BookingCreate(BookingBase):
     pass
 
 class BookingResponse(BookingBase):
     id: int
-    user_id: int
+    user_id: str # Changed to str to match UUID
 
     class Config:
         from_attributes = True
