@@ -1,12 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-import os
-from openai import OpenAI
-from app.core.config import settings
+from app.providers.llm.openai_provider import OpenAILLMProvider
+from app.providers.base import ProviderFallbackManager
 
 router = APIRouter()
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+llm_providers = [OpenAILLMProvider()] 
 
 class Message(BaseModel):
     role: str
@@ -18,27 +17,16 @@ class ChatRequest(BaseModel):
 
 @router.post("/")
 async def chat_with_ai(request: ChatRequest):
-    try:
-        system_content = (
-            "You are WanderBot, an expert travel assistant for the minutebound app. "
-            "Help users plan trips, suggest local attractions, give weather advice, "
-            "and create day-by-day itineraries. Keep responses concise and engaging."
-        )
-        
-        if request.context:
-            system_content += f"\n\nCurrent Context: {request.context}"
-            
-        system_prompt = {"role": "system", "content": system_content}
-        
-        api_messages = [system_prompt] + [{"role": m.role, "content": m.content} for m in request.messages]
-        
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=api_messages,
-            temperature=0.7
-        )
-        
-        return {"reply": response.choices[0].message.content}
+    formatted_messages = [{"role": m.role, "content": m.content} for m in request.messages]
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    result = await ProviderFallbackManager.execute(
+        llm_providers, 
+        "generate_chat_reply", 
+        messages=formatted_messages, 
+        context=request.context
+    )
+    
+    if isinstance(result, dict) and "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+        
+    return {"reply": result}

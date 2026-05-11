@@ -2,12 +2,10 @@ from pydantic import BaseModel
 from typing import Optional
 
 class Attraction(BaseModel):
-    id: int
+    id: str
     name: str
-    category: str         
-    attraction_type: str  
-    address: str          
-    website: Optional[str] = None
-    opening_hours: Optional[str] = None
-    latitude: float   
-    longitude: float  
+    category: Optional[str] = None
+    lat: float
+    lon: float
+    distance_km: Optional[float] = None
+    address: Optional[str] = None

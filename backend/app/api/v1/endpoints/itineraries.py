@@ -23,7 +23,6 @@ from app.core.config import settings
 
 router = APIRouter()
 
-# --- HELPER FUNCTIONS (Kept from original) ---
 def sanitize_text(text) -> str:
     if text is None:
         return ""
@@ -151,11 +150,12 @@ def build_pdf_content(payload_dict: dict) -> bytes:
             pdf.cell(0, 7, f"   - {sanitize_text(attr.get('name'))}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
-    activities = payload_dict.get("activities", [])
-    if activities:
-        draw_section_header("Tours & Activities")
+    # UPDATED SECTION: changed activities to tours
+    tours = payload_dict.get("tours", [])
+    if tours:
+        draw_section_header("Tours & Experiences")
         pdf.set_font("helvetica", "", 11)
-        for act in activities:
+        for act in tours:
             name = act.get('name') or act.get('title')
             pdf.cell(0, 7, f"   - {sanitize_text(name)}", new_x="LMARGIN", new_y="NEXT")
 
@@ -179,8 +179,6 @@ def send_background_trip_email(user_email: str, user_name: str, destination: str
     except Exception as e:
         print(f"Background email error: {e}")
 
-# --- API ENDPOINTS ---
-
 @router.post("/generate-pdf")
 async def generate_itinerary_pdf(payload: ItineraryGenerateRequest):
     try:
@@ -201,13 +199,11 @@ async def save_itinerary(
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    # Check for exact duplicate data to prevent spamming save
     existing = db.query(SavedItinerary).filter(SavedItinerary.user_id == current_user.id).all()
     for itinerary in existing:
         if itinerary.data == payload.data: 
-            return itinerary # Return existing if data matches
+            return itinerary 
             
-    # Generate a share token immediately if they saved it as non-private
     token = secrets.token_urlsafe(16) if payload.visibility != VisibilityEnum.PRIVATE else None
 
     new_itinerary = SavedItinerary(
@@ -245,9 +241,6 @@ async def delete_itinerary(itinerary_id: str, db: Session = Depends(get_db), cur
     db.commit()
     return {"message": "Itinerary deleted successfully"}
 
-
-# --- NEW VISIBILITY & SHARING ENDPOINTS ---
-
 @router.patch("/{itinerary_id}/visibility", response_model=ItineraryResponse)
 async def update_itinerary_visibility(
     itinerary_id: str,
@@ -255,14 +248,12 @@ async def update_itinerary_visibility(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Allows a user to change their itinerary from PRIVATE to PUBLIC"""
     itinerary = db.query(SavedItinerary).filter(SavedItinerary.id == itinerary_id, SavedItinerary.user_id == current_user.id).first()
     if not itinerary:
         raise HTTPException(status_code=404, detail="Itinerary not found")
     
     itinerary.visibility = payload.visibility
     
-    # Ensure they have a share token if it's no longer private
     if payload.visibility != VisibilityEnum.PRIVATE and not itinerary.share_token:
         itinerary.share_token = secrets.token_urlsafe(16)
         
@@ -272,7 +263,6 @@ async def update_itinerary_visibility(
 
 @router.get("/shared/{share_token}", response_model=ItineraryResponse)
 async def get_shared_itinerary(share_token: str, db: Session = Depends(get_db)):
-    """Public endpoint to fetch an itinerary if you have the secure link"""
     itinerary = db.query(SavedItinerary).filter(SavedItinerary.share_token == share_token).first()
     if not itinerary:
         raise HTTPException(status_code=404, detail="Shared itinerary not found")
@@ -290,7 +280,6 @@ async def email_shared_itinerary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Emails the itinerary PDF and an optional personal message to a friend"""
     itinerary = db.query(SavedItinerary).filter(SavedItinerary.id == itinerary_id, SavedItinerary.user_id == current_user.id).first()
     if not itinerary:
         raise HTTPException(status_code=404, detail="Itinerary not found")
@@ -303,12 +292,10 @@ async def email_shared_itinerary(
             msg['From'] = settings.FROM_EMAIL
             msg['To'] = payload.email
             
-            # Construct body
             body = f"Hi there,\n\n{current_user.first_name} {current_user.last_name} thought you'd like to see their itinerary for {itinerary.destination}.\n"
             if payload.message:
                 body += f"\nThey included a message:\n\"{payload.message}\"\n"
             
-            # If public, add a link to view online
             if itinerary.visibility != VisibilityEnum.PRIVATE and itinerary.share_token:
                 frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
                 body += f"\nYou can view the full interactive trip online here:\n{frontend_url}/shared/{itinerary.share_token}\n"

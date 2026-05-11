@@ -7,6 +7,8 @@ from app.core.config import settings
 from app.db.models import SystemHealthStatus
 from app.db.database import SessionLocal 
 
+from app.services.base_amadeus_client import BaseAmadeusClient
+
 # Detailed, human-readable definitions
 HTTP_STATUS_DESCRIPTIONS = {
     200: "Successful Response - Service is Fully Operational",
@@ -36,21 +38,50 @@ class HealthService:
         """Pings both internal and external endpoints and saves all to the database schema."""
         print(f"🔄 [HEALTH] Pinging {'API: ' + target_api if target_api else 'all endpoints'}...")
         
+        # 1. Fetch a real, dynamic Amadeus token first
+        try:
+            amadeus = BaseAmadeusClient()
+            amadeus_token = await amadeus.get_token()
+        except Exception as e:
+            print(f"⚠️ [HEALTH] Failed to fetch Amadeus token for health check: {e}")
+            amadeus_token = None
+            
+        # 2. Set up the correct header using the fetched token
+        amadeus_headers = {"Authorization": f"Bearer {amadeus_token}"} if amadeus_token else {}
+        
         # Unified endpoint definitions (Internal + External)
         api_definitions = {
             "backend_api": {"url": "Internal Backend Service (Self-Check)", "method": "INTERNAL"},
             "frontend_app": {"url": str(settings.FRONTEND_URL), "method": "GET"},
-            "OpenWeather": {"url": f"https://pro.openweathermap.org/data/2.5/weather?lat=0&lon=0&appid={settings.WEATHER_API_KEY or ''}", "method": "GET"},
+            "OpenWeather": {"url": f"https://pro.openweathermap.org/data/2.5/weather?lat=0&lon=0&appid={settings.OPENWEATHER_API_KEY or ''}", "method": "GET"},
             "SerpApi": {"url": f"https://serpapi.com/search.json?engine=google&q=test&api_key={settings.SERPAPI_KEY or ''}", "method": "GET"},
             "BigDataCloud": {"url": f"https://api-bdc.net/data/reverse-geocode?latitude=0&longitude=0&key={settings.BDC_API_KEY or ''}", "method": "GET"},
-            "AirLabs": {"url": f"https://airlabs.co/api/v9/ping?api_key={settings.AIRLABS_API_KEY or ''}", "method": "GET"},
-            "Amadeus_Auth": {"url": "https://api.amadeus.com/v1/security/oauth2/token", "method": "POST", "data": {"grant_type": "client_credentials", "client_id": settings.AMADEUS_CLIENT_ID or "", "client_secret": settings.AMADEUS_CLIENT_SECRET or ""}},
-            "Amadeus_Tours": {"url": "https://api.amadeus.com/v1/shopping/activities?latitude=40.414369&longitude=-105.691708&radius=10", "method": "GET", "headers": {"Authorization": f"Bearer {settings.AMADEUS_CLIENT_ID or ''}"}},
-            "OSM_Overpass": {"url": "https://lz4.overpass-api.de/api/interpreter", "method": "GET"},
+            "AirLabs": {"url": f"https://airlabs.co/api/v9/ping?api_key={settings.AIRLABS_API_KEY or ''}", "method": "GET"},     
+            "Amadeus_Auth": {
+                "url": "https://api.amadeus.com/v1/security/oauth2/token", 
+                "method": "POST", 
+                "headers": {"Content-Type": "application/x-www-form-urlencoded"}, # Added required header
+                "data": {"grant_type": "client_credentials", "client_id": settings.AMADEUS_CLIENT_ID or "", "client_secret": settings.AMADEUS_CLIENT_SECRET or ""}
+            },
+            "Amadeus_Flights": {
+                "url": "https://api.amadeus.com/v1/reference-data/locations?keyword=ATL&subType=AIRPORT",
+                "method": "GET", 
+                "headers": amadeus_headers # Updated to use dynamic token
+            },
+            "Amadeus_Stays": {
+                "url": "https://api.amadeus.com/v1/reference-data/locations/hotels/by-city?cityCode=ATL", 
+                "method": "GET", 
+                "headers": amadeus_headers # Updated to use dynamic token
+            },
+            "Amadeus_Tours": {
+                "url": "https://api.amadeus.com/v1/shopping/activities?latitude=40.414369&longitude=-105.691708&radius=10", 
+                "method": "GET", 
+                "headers": amadeus_headers # Updated to use dynamic token
+            }, 
+            "Geoapify_Places": {"url": f"https://api.geoapify.com/v2/places?categories=tourism&filter=circle:0,0,100&limit=1&apiKey={settings.GEOAPIFY_API_KEY or ''}", "method": "GET"},
             "Mapbox": {"url": f"https://api.mapbox.com/directions/v5/mapbox/driving/0,0;1,1?access_token={settings.MAPBOX_API_KEY or ''}", "method": "GET"},
             "OpenAI": {"url": "https://api.openai.com/v1/models", "method": "GET", "headers": {"Authorization": f"Bearer {settings.OPENAI_API_KEY or ''}"}}
         }
-
         timeout = 10.0
         current_time = datetime.now(timezone.utc)
 

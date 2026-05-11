@@ -2,8 +2,8 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from datetime import date as date_module
 from dateutil.relativedelta import relativedelta
-from app.api.v1.endpoints.hotels import *
-from app.schemas.hotel import Hotel, HotelOffer
+from app.api.v1.endpoints.stays import *
+from app.schemas.stay import Hotel, HotelOffer
 
 pytestmark = pytest.mark.asyncio
 

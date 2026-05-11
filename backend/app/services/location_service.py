@@ -1,5 +1,5 @@
 import httpx
-from app.services.base_client import BaseAmadeusClient
+from app.services.base_amadeus_client import BaseAmadeusClient
 from app.core.config import settings  
 class LocationService(BaseAmadeusClient):
     async def search_locations(self, keyword: str):

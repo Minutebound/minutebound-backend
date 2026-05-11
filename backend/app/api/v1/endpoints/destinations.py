@@ -1,65 +1,52 @@
-from fastapi import APIRouter, Request, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from app.db.database import get_db
 from app.schemas.destination import DestinationCreate, DestinationResponse
 from app.services.destination_service import destination_service
-from app.core.enums import PlaceType
-from app.api.v1.deps import get_current_admin
 
 router = APIRouter()
 
-@router.get("/top")
-async def get_top_destinations(request: Request):
-    """Returns the top 5 most searched destinations using Redis."""
-    try:
-        top_destinations = await request.app.state.redis.zrevrange("top_destinations", 0, 4, withscores=True)
-        
-        results = []
-        for dest, count in top_destinations:
-            parts = dest.split(", ")
-            city = parts[0]
-            state = parts[1] if len(parts) > 1 else ""
-            
-            results.append({
-                "city": city,
-                "state": state,
-                "full_name": dest,
-                "searches": int(count)
-            })
-            
-        return results
-    except Exception as e:
-        print(f"[Redis] Failed to fetch top destinations: {e}")
-        return []
+@router.get("/", response_model=List[DestinationResponse])
+def get_destinations(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Standard list endpoint for destinations.
+    Includes pagination (skip/limit) for efficient data loading.
+    """
+    # If you have a destination_service.py, you can route this through it
+    # return destination_service.get_destinations(db=db, skip=skip, limit=limit)
+    
+    # Otherwise, direct SQLAlchemy query:
+    return db.query(Destination).offset(skip).limit(limit).all()
 
-# --- NEW DATABASE ENDPOINTS ---
+@router.get("/top")
+async def get_top_destinations(db: Session = Depends(get_db)):
+    """Returns top manual destinations and live SerpApi trending locations."""
+    return await destination_service.get_top_destinations(db)
 
 @router.post("/", response_model=DestinationResponse)
-def create_destination(
-    dest_in: DestinationCreate, 
-    db: Session = Depends(get_db),
-    # Optional: protect this route so only admins can add places
-    # current_user = Depends(get_current_admin)
-):
-    """Create a new destination in the database."""
+def create_destination(dest_in: DestinationCreate, db: Session = Depends(get_db)):
+    """Create a new manual destination."""
     return destination_service.create_destination(db=db, dest_in=dest_in)
-
 
 @router.get("/search", response_model=List[DestinationResponse])
 def search_destinations(
+    query: Optional[str] = None,
+    state_code: Optional[str] = None,
+    category: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    state_code: Optional[str] = None,
-    place_type: Optional[PlaceType] = None,
     db: Session = Depends(get_db)
 ):
-    """Search for destinations by state or OSM place type (city, town, county, etc)."""
+    """Search destinations by name, state, or category (e.g. Hidden Gems)."""
     return destination_service.search_destinations(
-        db=db, skip=skip, limit=limit, state_code=state_code, place_type=place_type
+        db=db, query=query, state_code=state_code, category=category, skip=skip, limit=limit
     )
-
 
 @router.get("/{dest_id}", response_model=DestinationResponse)
 def get_destination(dest_id: int, db: Session = Depends(get_db)):

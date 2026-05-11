@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, Dict
 
-class Activity(BaseModel):
+class Tour(BaseModel):
     id: str
     name: str
     short_description: Optional[str] = None
@@ -10,4 +10,4 @@ class Activity(BaseModel):
     currency: Optional[str] = None
     picture_url: Optional[str] = None
     minimum_duration: Optional[str] = None
-    distance_km: Optional[float] = None  
+    distance_km: Optional[float] = None

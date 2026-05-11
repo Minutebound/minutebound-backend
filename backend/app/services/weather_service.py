@@ -6,7 +6,7 @@ from app.core.config import settings
 
 class WeatherService:
     def __init__(self):
-        self.api_key = settings.WEATHER_API_KEY
+        self.api_key = settings.OPENWEATHER_API_KEY
 
     async def get_weather_for_trip(self, lat: float, lon: float, check_in_date: str, check_out_date: str):
         check_in = datetime.strptime(check_in_date, "%Y-%m-%d")                                                                                                                                                             

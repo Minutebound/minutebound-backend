@@ -42,7 +42,6 @@ class BaseAmadeusClient:
         headers: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None
     ) -> Any:
-        """🌟 ADDED: Generic request helper that works with Redis Caching"""
         url = f"{self.base_url}{endpoint}"
         
         token = await self.get_token()

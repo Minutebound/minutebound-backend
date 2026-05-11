@@ -3,7 +3,6 @@ from typing import List, Optional, Any, Dict
 from datetime import datetime
 from enum import Enum as PyEnum
 
-# Enum for API validation to match the database
 class VisibilityEnum(str, PyEnum):
     PRIVATE = "PRIVATE"
     PUBLIC = "PUBLIC"
@@ -20,7 +19,7 @@ class ItineraryGenerateRequest(BaseModel):
     flight: Optional[Dict[str, Any]] = None
     hotel: Optional[Dict[str, Any]] = None
     weather: Optional[Dict[str, Any]] = None
-    activities: Optional[List[Dict[str, Any]]] = []
+    tours: Optional[List[Dict[str, Any]]] = []
     attractions: Optional[List[Dict[str, Any]]] = []
 
 class ItineraryBase(BaseModel):
@@ -45,8 +44,6 @@ class ItineraryResponse(ItineraryBase):
 
     class Config:
         from_attributes = True
-
-# --- SHARING SCHEMAS ---
 
 class UpdateVisibilityRequest(BaseModel):
     visibility: VisibilityEnum

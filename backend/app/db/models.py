@@ -19,29 +19,29 @@ class Destination(Base):
     __tablename__ = "destinations"
 
     id = Column(Integer, primary_key=True, index=True)
-    osm_id = Column(String, index=True, nullable=True) # OpenStreetMap ID
-    name = Column(String, index=True, nullable=False)
-    
-    # OSM Place Classification
-    place_type = Column(SQLEnum(PlaceType), nullable=False)
+    osm_id = Column(String, index=True, nullable=True) 
+    name = Column(String, index=True, nullable=False) # title
     
     # Geographic Data
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    
-    # US Specific Hierarchies
+    place_name = Column(String, nullable=True) # Full descriptive name
     state_code = Column(String(2), index=True, nullable=True)
-    county = Column(String, index=True, nullable=True)
     country_code = Column(String(2), default="US")
     
-    # Metadata
-    population = Column(Integer, nullable=True)
+    # Categorization & Description
+    category = Column(String, index=True, nullable=True) # Coastal Escapes, etc.
     description = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
+    
+    # Pricing & Popularity
+    avg_flight_price = Column(Float, nullable=True)
+    avg_hotel_price = Column(Float, nullable=True)
+    popularity_score = Column(Integer, default=0)
 
     # Relationships
-    events = relationship("Event", back_populates="destination", cascade="all, delete-orphan")
-    
+    events = relationship("Event", back_populates="destination", cascade="all, delete-orphan")    
+
 #Event Model
 class Event(Base):
     __tablename__ = "events"

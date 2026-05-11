@@ -14,10 +14,69 @@ router = APIRouter()
 def create_event(
     event_in: EventCreate, 
     db: Session = Depends(get_db)
-    # Optional: current_user = Depends(get_current_admin)
 ):
     """Create a new categorized event."""
     return event_service.create_event(db=db, event_in=event_in)
+
+
+@router.get("/top", response_model=List[EventResponse])
+def get_top_events(
+    limit: int = Query(12, ge=1, le=50),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch top events for the Landing Page carousel safely using event_service.
+    """
+    events = event_service.get_events(db=db, skip=0, limit=limit)
+    return events
+
+
+@router.get("/search", response_model=List[EventResponse])
+def search_events(
+    category: Optional[str] = None, 
+    query: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Search endpoint powering the /events Explorer map.
+    Safely maps the string 'category' to your EventCategory Enum.
+    """
+    enum_category = None
+    if category and category.lower() != "all":
+        try:
+            # Convert string to your Enum type
+            enum_category = EventCategory(category)
+        except ValueError:
+            pass # Ignore invalid categories and just return all
+
+    # Fetch events using your existing service
+    events = event_service.get_events(db=db, skip=0, limit=1000, category=enum_category)
+    
+    # Apply text search filter safely in Python
+    if query:
+        search_term = query.lower()
+        events = [
+            e for e in events 
+            if (e.title and search_term in e.title.lower()) or 
+               (e.venue_name and search_term in e.venue_name.lower())
+        ]
+        
+    return events
+
+
+@router.get("/{event_id}", response_model=EventResponse)
+def get_event(
+    event_id: int, 
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch a single event's full details by ID.
+    """
+    # Most services use get_event or get, adjust this method name if your service uses a different one
+    event = event_service.get_event(db=db, event_id=event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
 
 
 @router.get("/", response_model=List[EventResponse])
@@ -31,10 +90,9 @@ def get_events(
     db: Session = Depends(get_db)
 ):
     """
-    Search and filter events.
-    Supports filtering by specific destination, event category, and date ranges.
+    Standard list and filter events.
     """
-    events = event_service.get_events(
+    return event_service.get_events(
         db=db, 
         skip=skip, 
         limit=limit, 
@@ -43,4 +101,3 @@ def get_events(
         start_date=start_date, 
         end_date=end_date
     )
-    return events

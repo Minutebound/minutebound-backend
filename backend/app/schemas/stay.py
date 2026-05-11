@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 
-class Hotel(BaseModel):
+class Stay(BaseModel):
     chain_code: Optional[str] = None
     iata_code: Optional[str] = None
     hotel_id: str
@@ -21,7 +21,7 @@ class RoomOffer(BaseModel):
     currency: str
     amenities: List[str]
 
-class HotelOffer(BaseModel):
+class StayOffer(BaseModel):
     hotel_id: str
     name: Optional[str] = None
     check_in_date: str

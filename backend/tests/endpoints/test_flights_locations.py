@@ -124,7 +124,7 @@ class Testapiendpoints():
     # @pytest.mark.anyio
     # async def test_search_flights_with_mock(self, origin, destination, date, return_date, adults, travel_class, children, expected_output):
     #     self.mock.return_value = expected_output
-    #     with patch("backend.app.api.v1.endpoints.flights.flight_service.search_flights") as mock_api:
+    #     with patch("app.api.v1.endpoints.flights.flight_service.search_flights") as mock_api:
     #         flights = await search_flights(origin, destination, date, return_date, adults, travel_class, children)
     #         print(flights[0])
     #         assert isinstance(flights[0], expected_output)
@@ -137,7 +137,7 @@ class Testapiendpoints():
     #     """
     #    
     #     mock.return_value = expected_output
-    #     with patch("backend.app.api.v1.endpoints.locations.location_service.get_airports_by_location", mock) as api_mock:
+    #     with patch("app.api.v1.endpoints.locations.location_service.get_airports_by_location", mock) as api_mock:
     #         airport = await get_nearest_airport(lat, long)
     #         assert airport == expected_output
     

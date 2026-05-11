@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List
-from app.services.hotel_service import hotel_service
-from app.schemas.hotel import Hotel, HotelOffer
+from app.services.stay_service import stay_service
+from app.schemas.stay import Stay, StayOffer
 from fastapi_cache.decorator import cache
 
 router = APIRouter()
 
-@router.get("/nearby", response_model=List[Hotel])
+@router.get("/nearby", response_model=List[Stay])
 @cache(expire=None) 
 async def get_nearby_hotels(
     lat: float = Query(..., description="Destination Latitude from global state"),
@@ -19,7 +19,7 @@ async def get_nearby_hotels(
     """
     Step 1: Fetches a list of hotels near the destination that ACTUALLY have rooms available.
     """
-    result = await hotel_service.get_available_hotels_by_geocode(
+    result = await stay_service.get_available_hotels_by_geocode(
         lat=lat, lon=lon, 
         check_in_date=check_in_date, check_out_date=check_out_date, 
         adults=adults, radius=radius
@@ -30,7 +30,7 @@ async def get_nearby_hotels(
         
     return result
 
-@router.get("/offer", response_model=HotelOffer)
+@router.get("/offer", response_model=StayOffer)
 @cache(expire=86400) 
 async def get_hotel_price(
     hotel_id: str = Query(..., description="The Amadeus Hotel ID from the clicked checkbox"),
@@ -41,7 +41,7 @@ async def get_hotel_price(
     """
     Step 2: Returns the price when the checkbox is clicked (Instantly pulled from cache).
     """
-    result = await hotel_service.get_specific_hotel_offer(
+    result = await stay_service.get_specific_hotel_offer(
         hotel_id=hotel_id, 
         check_in_date=check_in_date, 
         check_out_date=check_out_date, 

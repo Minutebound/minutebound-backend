@@ -1,25 +1,24 @@
 from pydantic import BaseModel
-from typing import Optional
-from app.core.enums import PlaceType
+from typing import Optional, List
 
 class DestinationBase(BaseModel):
     name: str
-    osm_id: Optional[str] = None
-    place_type: PlaceType
     latitude: float
     longitude: float
+    place_name: Optional[str] = None
     state_code: Optional[str] = None
-    county: Optional[str] = None
-    country_code: str = "US"
-    population: Optional[int] = None
+    category: Optional[str] = None # Mountain Retreats, City Breaks, etc.
     description: Optional[str] = None
     image_url: Optional[str] = None
+    avg_flight_price: Optional[float] = None
+    avg_hotel_price: Optional[float] = None
 
 class DestinationCreate(DestinationBase):
     pass
 
 class DestinationResponse(DestinationBase):
     id: int
+    popularity_score: int
 
     class Config:
         from_attributes = True

@@ -5,46 +5,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles 
 from app.core.config import settings
 from app.db.database import engine, Base, SessionLocal 
-from app.api.v1.endpoints import activities, admin, analytics, attractions, auth, chatbot, destinations, driving, events, flights, health, hotels, itineraries,locations, users, weather
+from app.api.v1.endpoints import admin, analytics, attractions, auth, chatbot, destinations, driving, events, flights, health, stays, itineraries, locations, tours, users, weather
 from app.services.health_service import health_service
-
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
+from fastapi.middleware.cors import CORSMiddleware
 
 Base.metadata.create_all(bind=engine)
 
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def custom_key_builder(
-    func,
-    namespace: str = "",
-    request: Request = None,
-    response: Response = None,
-    args: tuple = (),       
-    kwargs: dict = None,    
-):
+def custom_key_builder(func, namespace: str = "", request: Request = None, response: Response = None, args: tuple = (), kwargs: dict = None):
     prefix = FastAPICache.get_prefix()
     kwargs = kwargs or {}   
-    
-    clean_params = [
-        f"{k}={v}" for k, v in kwargs.items() 
-        if k not in ["request", "response", "db", "self"]
-    ]
+    clean_params = [f"{k}={v}" for k, v in kwargs.items() if k not in ["request", "response", "db", "self"]]
     params_str = ",".join(clean_params)
-    
     key_parts = [prefix]
-    
-    if namespace and namespace != prefix:
-        key_parts.append(namespace)
-        
+    if namespace and namespace != prefix: key_parts.append(namespace)
     key_parts.append(func.__name__)
-    
-    if params_str:
-        key_parts.append(params_str)
-        
+    if params_str: key_parts.append(params_str)
     final_key = ":".join(key_parts)
     final_key = final_key.replace(f"{prefix}:{prefix}", prefix)
-    
     return final_key.replace("::", ":")
 
 def get_application():
@@ -64,20 +53,17 @@ def get_application():
     _app.include_router(flights.router, prefix="/api/v1/flights", tags=["flights"])
     _app.include_router(locations.router, prefix="/api/v1/locations", tags=["locations"])
     _app.include_router(destinations.router, prefix="/api/v1/destinations", tags=["destinations"])
-    _app.include_router(events.router, prefix="/api/v1/events", tags=["events"])
-    
+    _app.include_router(events.router, prefix="/api/v1/events", tags=["events"])    
     _app.include_router(driving.router, prefix="/api/v1/driving", tags=["driving"])
-    _app.include_router(hotels.router, prefix="/api/v1/hotels", tags=["hotels"])
-    _app.include_router(activities.router, prefix="/api/v1/activities", tags=["activities"])
+    _app.include_router(stays.router, prefix="/api/v1/stays", tags=["stays"])    
+    _app.include_router(tours.router, prefix="/api/v1/tours", tags=["tours"])
     _app.include_router(attractions.router, prefix="/api/v1/attractions", tags=["attractions"])
     _app.include_router(weather.router, prefix="/api/v1/weather", tags=["weather"])
-
     _app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     _app.include_router(itineraries.router, prefix="/api/v1/itineraries", tags=["itineraries"])
     _app.include_router(users.router, prefix="/api/v1/users", tags=["users"]) 
     _app.include_router(chatbot.router, prefix="/api/v1/chatbot", tags=["chatbot"])
     _app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
-    
     _app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
     _app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
     
@@ -85,17 +71,8 @@ def get_application():
 
 app = get_application()
 
-
-# --- AUTOMATED BACKGROUND SCHEDULER ---
 async def automated_health_check_task():
-    """
-    Runs continuously in the background independent of user traffic. 
-    Wakes up every 48 hours to automatically ping all health endpoints.
-    """
-    # Wait 60 seconds before the first check to let the server fully boot
-    # and prevent rate-limit spam during rapid dev restarts.
     await asyncio.sleep(60) 
-    
     while True:
         print("⏳ [SCHEDULER] Triggering automatic background health check...")
         db = SessionLocal()
@@ -105,11 +82,7 @@ async def automated_health_check_task():
             print(f"❌ [SCHEDULER] Error during automatic health check: {e}")
         finally:
             db.close()
-        
-        # Sleep for exactly 48 hours (48 hours * 60 minutes * 60 seconds)
         await asyncio.sleep(48 * 60 * 60)
-# --------------------------------------
-
 
 @app.on_event("startup")
 async def startup():
@@ -121,8 +94,6 @@ async def startup():
         key_builder=custom_key_builder 
     )
     app.state.redis = aioredis.from_url(redis_url, encoding="utf8", decode_responses=True)
-    
-    # Fire and forget the background scheduler when the server starts
     asyncio.create_task(automated_health_check_task())
 
 @app.get("/")
