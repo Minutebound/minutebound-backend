@@ -2,13 +2,10 @@ import httpx
 import asyncio
 import airportsdata
 from app.core.config import settings
-from app.schemas.flight import FlightOffer, FlightSegment, FlightItinerary
+from app.schemas.flight import FlightOffer, FlightSegment, FlightItinerary, Amenities
 
 class SerpFlightProvider:
-    def __init__(self):
-        self.api_key = settings.SERPAPI_KEY
-        self.base_url = "https://serpapi.com/search.json"
-        self.airports_dict = airportsdata.load('IATA')
+    # ... __init__ stays the same ...
 
     def _parse_flight_data(self, raw_data: dict, expected_class: str) -> list[FlightOffer]:
         clean_results = []
@@ -28,6 +25,17 @@ class SerpFlightProvider:
                     arr = seg.get("arrival_airport", {})
                     airline_name = seg.get("airline", "UNKNOWN")
 
+                    duration_mins = seg.get("duration", 0)
+                    seg_duration = f"{duration_mins // 60}H {duration_mins % 60}M" if duration_mins else "N/A"
+
+                    # Parse amenities from Google's extensions
+                    amenities = Amenities(legroom=seg.get("legroom"))
+                    for ext in seg.get("extensions", []):
+                        ext_low = ext.lower()
+                        if "wi-fi" in ext_low or "wifi" in ext_low: amenities.wifi = True
+                        if "power" in ext_low or "usb" in ext_low: amenities.power_usb = True
+                        if "meal" in ext_low or "snack" in ext_low: amenities.food = ext
+
                     clean_segments.append(FlightSegment(
                         departure_airport=dep.get("id", "TBA"),
                         departure_time=dep.get("time", "TBA"),
@@ -35,19 +43,25 @@ class SerpFlightProvider:
                         arrival_time=arr.get("time", "TBA"),
                         carrier_code=airline_name, 
                         carrier_name=airline_name,  
-                        flight_number=str(seg.get("flight_number", "TBA"))
+                        flight_number=str(seg.get("flight_number", "TBA")),
+                        aircraft=seg.get("airplane"),
+                        duration=seg_duration,
+                        cabin_class=seg.get("travel_class", expected_class),
+                        amenities=amenities
                     ))
 
                 duration_mins = offer.get("total_duration", 0)
                 formatted_duration = f"{duration_mins // 60}H {duration_mins % 60}M" if duration_mins else "N/A"
-                
+                emissions = offer.get("carbon_emissions", {}).get("this_flight") # Extracts emissions in grams
+
                 clean_results.append(FlightOffer(
                     id=f"serpapi_leg_{idx}", 
                     price=price,
                     currency="USD",
                     airline_code=clean_segments[0].carrier_name if clean_segments else "UNKNOWN",
                     airline_name=clean_segments[0].carrier_name if clean_segments else "UNKNOWN",    
-                    cabin_class=expected_class,        
+                    cabin_class=expected_class,
+                    carbon_emissions_kg=(emissions // 1000) if emissions else None,
                     itineraries=[FlightItinerary(duration=formatted_duration, stops=max(0, len(clean_segments) - 1), segments=clean_segments)] 
                 ))
             except Exception:

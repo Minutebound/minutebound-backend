@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: List[str]
     POSTGRES_URL: str 
 
+    # Stripe API Key for payment processing
+    STRIPE_SECRET_KEY: str
+
     # External APIs
     AMADEUS_CLIENT_ID: str 
     AMADEUS_CLIENT_SECRET: str 
