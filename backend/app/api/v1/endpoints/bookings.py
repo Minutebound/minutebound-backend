@@ -48,7 +48,7 @@ def get_booking(
         
     return booking
 
-@router.get("/me/list", response_model=List[BookingResponse])
+@router.get("/me/bookings", response_model=List[BookingResponse])
 def get_my_bookings(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),

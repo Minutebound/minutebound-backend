@@ -69,14 +69,14 @@ class Testapiendpoints():
 
     @pytest.mark.parametrize(*search_flight_endpoint_param)
     @pytest.mark.anyio
-    async def test_search_flights(self, origin, destination, date, return_date, adults, travel_class, children, expected_output):
+    async def test_get_flights(self, origin, destination, date, return_date, adults, travel_class, children, expected_output):
         # Use dynamic dates ~1 month out so tests don't break as time passes
         if date is None:
             date = str(date_module.today() + relativedelta(months=1))
         if return_date is None:
             return_date = str(date_module.today() + relativedelta(months=1, days=5))
 
-        flights = await search_flights(origin, destination, date, return_date, adults, travel_class, children)
+        flights = await get_flights(origin, destination, date, return_date, adults, travel_class, children)
 
         assert isinstance(flights, list)
         if len(flights) == 0:
@@ -104,15 +104,15 @@ class Testapiendpoints():
 
     @pytest.mark.parametrize(*search_flight_error_param)
     @pytest.mark.anyio
-    async def test_search_flights_errors(self, origin, destination, service_return, expected_status):
+    async def test_get_flights_errors(self, origin, destination, service_return, expected_status):
         date = str(date_module.today() + relativedelta(months=1))
         return_date = str(date_module.today() + relativedelta(months=1, days=5))
 
-        with patch("app.api.v1.endpoints.flights.flight_service.search_flights", new_callable=AsyncMock) as mock_search:
+        with patch("app.api.v1.endpoints.flights.flight_service.get_flights", new_callable=AsyncMock) as mock_search:
             mock_search.return_value = service_return
 
             with pytest.raises(HTTPException) as exc_info:
-                await search_flights(origin, destination, date, return_date, 1, "ECONOMY", 0)
+                await get_flights(origin, destination, date, return_date, 1, "ECONOMY", 0)
 
             assert exc_info.value.status_code == expected_status
             assert exc_info.value.detail == service_return["error"]
@@ -122,10 +122,10 @@ class Testapiendpoints():
     
     # @pytest.mark.parametrize(*search_flight_endpoint_param)
     # @pytest.mark.anyio
-    # async def test_search_flights_with_mock(self, origin, destination, date, return_date, adults, travel_class, children, expected_output):
+    # async def test_get_flights_with_mock(self, origin, destination, date, return_date, adults, travel_class, children, expected_output):
     #     self.mock.return_value = expected_output
-    #     with patch("app.api.v1.endpoints.flights.flight_service.search_flights") as mock_api:
-    #         flights = await search_flights(origin, destination, date, return_date, adults, travel_class, children)
+    #     with patch("app.api.v1.endpoints.flights.flight_service.get_flights") as mock_api:
+    #         flights = await get_flights(origin, destination, date, return_date, adults, travel_class, children)
     #         print(flights[0])
     #         assert isinstance(flights[0], expected_output)
     

@@ -3,7 +3,7 @@ from app.services.base_amadeus_client import BaseAmadeusClient
 from app.schemas.flight import FlightOffer, FlightItinerary, FlightSegment, Amenities
 
 class AmadeusFlightProvider(BaseAmadeusClient):
-    async def search_flights(self, origin: str, destination: str, date: str, return_date: str, adults: int, travel_class: str = "ECONOMY", children: int = 0):
+    async def get_flights(self, origin: str, destination: str, date: str, return_date: str, adults: int, travel_class: str = "ECONOMY", children: int = 0):
         token = await self.get_token()
         if not token: 
             return {"error": "Amadeus Authentication Failed"}

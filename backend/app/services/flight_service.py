@@ -9,10 +9,10 @@ class FlightService:
         self.serp_provider = SerpFlightProvider()
         self.providers = [self.amadeus_provider, self.serp_provider]  # order of fallback
 
-    async def search_flights(self, origin: str, destination: str, date: str, return_date: str, adults: int, travel_class: str = "ECONOMY", children: int = 0):
+    async def get_flights(self, origin: str, destination: str, date: str, return_date: str, adults: int, travel_class: str = "ECONOMY", children: int = 0):
         return await ProviderFallbackManager.execute(
             self.providers,
-            "search_flights",
+            "get_flights",
             origin, destination, date, return_date, adults, travel_class, children
         )
 

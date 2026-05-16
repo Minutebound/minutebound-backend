@@ -7,7 +7,7 @@ from fastapi_cache.decorator import cache
 router = APIRouter()
 
 @router.get("/nearby", response_model=List[Stay])
-@cache(expire=None) 
+@cache(expire=86400) # FIXED: Added explicit expiry for Redis storage
 async def get_nearby_hotels(
     lat: float = Query(..., description="Destination Latitude from global state"),
     lon: float = Query(..., description="Destination Longitude from global state"),
@@ -52,3 +52,11 @@ async def get_hotel_price(
         raise HTTPException(status_code=400, detail=result["error"])
         
     return result
+
+@router.post("/book")
+async def book_stay(request: dict):
+    """
+    Step 3: Common checkout integration for Stays.
+    """
+    # Stubbed for real Amadeus hotel booking integration
+    return {"success": True, "booking_ref": "STAY-" + str(hash(str(request)))[:8].upper()}

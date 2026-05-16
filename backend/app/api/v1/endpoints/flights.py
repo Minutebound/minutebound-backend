@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/search", response_model=List[FlightOffer])
 @cache(expire=86400) 
-async def search_flights(
+async def get_flights(
     origin: str,
     destination: str,
     date: str,
@@ -20,7 +20,7 @@ async def search_flights(
     """
     Search for flights. Supports one-way if return_date is omitted.
     """
-    results = await flight_service.search_flights(
+    results = await flight_service.get_flights(
         origin=origin,
         destination=destination,
         date=date,

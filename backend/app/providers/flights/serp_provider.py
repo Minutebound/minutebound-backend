@@ -68,7 +68,7 @@ class SerpFlightProvider:
                 continue
         return clean_results
 
-    async def search_flights(self, origin: str, destination: str, date: str, return_date: str, adults: int, travel_class: str = "ECONOMY", children: int = 0):
+    async def get_flights(self, origin: str, destination: str, date: str, return_date: str, adults: int, travel_class: str = "ECONOMY", children: int = 0):
         if not self.api_key: return {"error": "SerpApi Key missing"}
 
         classes_to_search = [c.strip().upper() for c in travel_class.split(",")]
