@@ -1,17 +1,81 @@
 import uuid
-import enum
 import random
 import string
 from datetime import datetime, timezone
-from sqlalchemy import Column, Boolean, Integer, String, Float, ForeignKey, DateTime, Text, Enum as SQLEnum, JSON
+from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, Text, Enum as SQLEnum, UniqueConstraint, DateTime, JSON
 from sqlalchemy.orm import relationship
-from app.core.enums import PlaceType, EventCategory, GenderEnum, UserRole, DevicePlatform, VisibilityEnum, BookingType, BookingStatus
+from app.core.enums import EventCategory, GenderEnum, UserRole, DevicePlatform, VisibilityEnum, BookingType, BookingStatus
 from app.db.database import Base
 
 def generate_travel_id():
     """Generates an 8-character string: '#' followed by 7 alphanumeric chars."""
     chars = string.ascii_uppercase + string.digits
     return "#" + ''.join(random.choices(chars, k=7))
+
+# 1. THE UNIVERSAL UUID MIXIN (from our previous step)
+import uuid
+class UUIDMixin:
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+
+# 2. COUNTRY TABLE (ISO 3166-1 Standard)
+class Country(Base, UUIDMixin):
+    __tablename__ = "countries"
+    
+    # ISO 3166-1 alpha-2 (e.g., 'US', 'GB', 'IN')
+    iso2 = Column(String(2), unique=True, index=True, nullable=False)
+    # ISO 3166-1 alpha-3 (e.g., 'USA', 'GBR', 'IND')
+    iso3 = Column(String(3), unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    
+    # Relationships
+    states = relationship("State", back_populates="country")
+    places = relationship("Place", back_populates="country")
+
+# 3. STATE / PROVINCE TABLE (ISO 3166-2 Standard)
+class State(Base, UUIDMixin):
+    __tablename__ = "states"
+    
+    country_id = Column(String(36), ForeignKey("countries.id"), nullable=False)
+    code = Column(String(10), index=True, nullable=False) # e.g., 'CO', 'CA', or international equivalents
+    name = Column(String, nullable=False) # e.g., 'Colorado'
+    
+    # Seller of Travel (SOT) Compliance
+    is_sot_restricted = Column(Boolean, default=False) 
+    affiliate_redirect_url = Column(String, nullable=True)
+    
+    # Relationships
+    country = relationship("Country", back_populates="states")
+    places = relationship("Place", back_populates="state")
+
+    # Prevent duplicate state codes within the same country
+    __table_args__ = (UniqueConstraint('country_id', 'code', name='_country_state_uc'),)
+
+# 4. PLACE / CITY TABLE (The Dynamic Cache)
+class Place(Base, UUIDMixin):
+    __tablename__ = "places"
+    
+    state_id = Column(String(36), ForeignKey("states.id"), nullable=True) # Nullable for countries without states
+    country_id = Column(String(36), ForeignKey("countries.id"), nullable=False)
+    
+    # The actual search string / city name (e.g., 'Boulder', 'Las Vegas')
+    name = Column(String, index=True, nullable=False)
+    
+    # Geolocation for mapping and radius searches
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    
+    # IATA code if this place is an airport (Useful for Duffel!)
+    iata_code = Column(String(3), index=True, nullable=True) 
+    
+    # The "Feed Up" metric: increment this every time a user searches it
+    search_count = Column(Integer, default=1, index=True)
+    
+    # Relationships
+    state = relationship("State", back_populates="places")
+    country = relationship("Country", back_populates="places")
+
+    # Prevent duplicating exact cities in the same state
+    __table_args__ = (UniqueConstraint('state_id', 'name', name='_state_city_name_uc'),)
 
 # --- DATABASE MODELS ---
 #Destination Model
@@ -153,33 +217,44 @@ class SavedItinerary(Base):
     bookings = relationship("Booking", back_populates="itinerary", cascade="all, delete-orphan")
 
 #Booking Model
+
 class Booking(Base):
     __tablename__ = "bookings"
 
-    # Primary Keys & Foreign Keys
+    # Primary Keys & Existing Foreign Keys
     id = Column(Integer, index=True, primary_key=True)
-    event_id = Column(Integer, ForeignKey("events.id"), nullable=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False) # Changed to String(36) to match User.id
-    
-    # RENAMED and FIXED TYPE (SavedItinerary uses String(36) UUIDs, not Integers)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False) 
     itinerary_id = Column(String(36), ForeignKey("saved_itineraries.id"), nullable=True) 
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=True)
 
     # Core Details
     booking_type = Column(SQLEnum(BookingType), index=True, nullable=False)
     confirmation_code = Column(String, nullable=True)
-    end_date = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
+    
+    # Providers
     provider_name = Column(String, nullable=False)
+    airline_provider = Column(String, nullable=True)
+    
+    # Origin & Destination (Kept as Strings until you build a destinations table!)
+    origin = Column(String, nullable=True)
+    destination = Column(String, nullable=True)
+    
+    # Dates & Status
     start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=True)
     status = Column(SQLEnum(BookingStatus), default=BookingStatus.PENDING, index=True)
+    
+    # Financial
     total_price = Column(Float, nullable=False)
 
     # Relationships
-    event = relationship("Event", back_populates="bookings")
     user = relationship("User", back_populates="bookings")
-    
-    # RENAMED from `trip` to `itinerary`
     itinerary = relationship("SavedItinerary", back_populates="bookings")
+    event = relationship("Event", back_populates="bookings")
+    # stay = relationship("Stay", back_populates="bookings")
+    # origin = relationship("Destination", foreign_keys=[origin_id])
+    # destination = relationship("Destination", foreign_keys=[destination_id])
 
 #System Health Status Model
 class SystemHealthStatus(Base):

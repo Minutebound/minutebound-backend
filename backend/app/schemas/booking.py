@@ -1,4 +1,5 @@
-# In backend/app/schemas/booking.py
+# backend/app/schemas/booking.py
+
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
@@ -10,12 +11,17 @@ class BookingBase(BaseModel):
     end_date: Optional[datetime] = None
     event_id: Optional[int] = None
     notes: Optional[str] = None
+    
+    # --- NEW SEPARATION ---
     provider_name: str
+    airline_provider: Optional[str] = None
+    
+    origin: Optional[str] = None
+    destination: Optional[str] = None
+    
     start_date: datetime
     status: BookingStatus = BookingStatus.PENDING
     total_price: float
-    
-    # RENAMED to itinerary_id and changed to str (UUID)
     itinerary_id: Optional[str] = None 
 
 class BookingCreate(BookingBase):
@@ -23,7 +29,7 @@ class BookingCreate(BookingBase):
 
 class BookingResponse(BookingBase):
     id: int
-    user_id: str # Changed to str to match UUID
+    user_id: str 
 
     class Config:
         from_attributes = True

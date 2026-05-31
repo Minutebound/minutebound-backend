@@ -2,7 +2,7 @@ import json
 import secrets
 from fastapi import APIRouter, Depends, Response, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Any
 from fpdf import FPDF
 from datetime import datetime
 

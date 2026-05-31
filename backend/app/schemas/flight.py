@@ -7,19 +7,24 @@ class Amenities(BaseModel):
     power_usb: Optional[bool] = False
     food: Optional[str] = None
 
+class BaggageAllowance(BaseModel):
+    type: str  # "checked" or "carry_on"
+    quantity: int
+
+class RefundPolicy(BaseModel):
+    is_refundable: bool
+    penalty_amount: Optional[float] = None
+    currency: Optional[str] = None
+
 class FlightSegment(BaseModel):
     departure_airport: str
     departure_airport_name: Optional[str] = None  
     departure_terminal: Optional[str] = None
-    departure_lat: Optional[float] = None
-    departure_lon: Optional[float] = None
     departure_time: str
     
     arrival_airport: str
     arrival_airport_name: Optional[str] = None    
     arrival_terminal: Optional[str] = None
-    arrival_lat: Optional[float] = None
-    arrival_lon: Optional[float] = None
     arrival_time: str
     
     carrier_code: str
@@ -28,8 +33,9 @@ class FlightSegment(BaseModel):
     aircraft: Optional[str] = None
     duration: Optional[str] = None
     cabin_class: Optional[str] = None
-    checked_bags: Optional[int] = 0  
-    carry_on_bags: Optional[int] = 0
+    
+    # Updated for Duffel
+    baggages: List[BaggageAllowance] = []
     amenities: Optional[Amenities] = None
 
 class FlightItinerary(BaseModel):
@@ -38,7 +44,7 @@ class FlightItinerary(BaseModel):
     segments: List[FlightSegment]
 
 class FlightOffer(BaseModel):
-    id: str
+    id: str  # Duffel Offer ID
     price: float
     currency: str
     airline_code: str
@@ -46,17 +52,25 @@ class FlightOffer(BaseModel):
     cabin_class: str
     carbon_emissions_kg: Optional[int] = None
     itineraries: List[FlightItinerary]
+    refund_policy: Optional[RefundPolicy] = None
     raw_offer_data: Optional[Dict[str, Any]] = None
 
+class PriceConfirmResponse(BaseModel):
+    priced_offer: FlightOffer
+    seat_maps: Optional[List[Dict[str, Any]]] = None # Pass Duffel seatmaps to frontend
+
 class PriceConfirmRequest(BaseModel):
-    """Payload to confirm the price of a specific flight offer"""
-    flight_offer: Dict[str, Any]
+    offer_id: str  # Updated from flight_offer: dict
 
 class FlightBookRequest(BaseModel):
-    """Payload to execute the actual booking"""
-    priced_offer: Dict[str, Any]
-    travelers: List[Dict[str, Any]]
+    offer_id: str  # Updated from priced_offer: dict
+    travelers: list
+    selected_seats: Optional[list] = None
 
 class PaymentIntentRequest(BaseModel):
     amount: float
     currency: str = "USD"
+    capture_method: Optional[str] = "manual" # Required for Hold & Capture flow
+
+class ImportOrderRequest(BaseModel):
+    order_id: str

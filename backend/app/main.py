@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles 
 from app.core.config import settings
 from app.db.database import engine, Base, SessionLocal 
-from app.api.v1.endpoints import admin, analytics, attractions, auth, chatbot, destinations, driving, events, flights, health, stays, itineraries, locations, tours, users, weather
+from app.api.v1.endpoints import admin, analytics, attractions, auth, bookings, chatbot, destinations, driving, events, flights, health, stays, itineraries, locations, tours, users, weather
 from app.services.health_service import health_service
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
@@ -65,6 +65,7 @@ def get_application():
     _app.include_router(chatbot.router, prefix="/api/v1/chatbot", tags=["chatbot"])
     _app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
     _app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
+    _app.include_router(bookings.router, prefix="/api/v1/bookings", tags=["Bookings"])
     _app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
     
     return _app
