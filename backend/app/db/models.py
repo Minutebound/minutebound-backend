@@ -18,25 +18,28 @@ class UUIDMixin:
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
 
 # 2. COUNTRY TABLE (ISO 3166-1 Standard)
+# 2. COUNTRY TABLE (ISO 3166-1 Standard)
 class Country(Base, UUIDMixin):
     __tablename__ = "countries"
     
-    # ISO 3166-1 alpha-2 (e.g., 'US', 'GB', 'IN')
-    iso2 = Column(String(2), unique=True, index=True, nullable=False)
-    # ISO 3166-1 alpha-3 (e.g., 'USA', 'GBR', 'IND')
+    # Separated as country_code (ISO 3166-1 alpha-2 e.g., 'US', 'GB', 'IN')
+    country_code = Column(String(2), unique=True, index=True, nullable=False)
     iso3 = Column(String(3), unique=True, nullable=False)
     name = Column(String, nullable=False)
     
-    # Relationships
-    states = relationship("State", back_populates="country")
+    # Relationships: cascade="all, delete-orphan" makes states a strict child of the country
+    states = relationship("State", back_populates="country", cascade="all, delete-orphan")
     places = relationship("Place", back_populates="country")
+
 
 # 3. STATE / PROVINCE TABLE (ISO 3166-2 Standard)
 class State(Base, UUIDMixin):
     __tablename__ = "states"
     
-    country_id = Column(String(36), ForeignKey("countries.id"), nullable=False)
-    code = Column(String(10), index=True, nullable=False) # e.g., 'CO', 'CA', or international equivalents
+    country_id = Column(String(36), ForeignKey("countries.id", ondelete="CASCADE"), nullable=False)
+    
+    # Separated as state_code
+    state_code = Column(String(10), index=True, nullable=False) # e.g., 'CO', 'CA'
     name = Column(String, nullable=False) # e.g., 'Colorado'
     
     # Seller of Travel (SOT) Compliance
@@ -47,8 +50,10 @@ class State(Base, UUIDMixin):
     country = relationship("Country", back_populates="states")
     places = relationship("Place", back_populates="state")
 
-    # Prevent duplicate state codes within the same country
-    __table_args__ = (UniqueConstraint('country_id', 'code', name='_country_state_uc'),)
+    # FIXED: Changed 'code' to 'state_code' to match the column name above
+    __table_args__ = (
+        UniqueConstraint('country_id', 'state_code', name='_country_state_uc'),
+    )
 
 # 4. PLACE / CITY TABLE (The Dynamic Cache)
 class Place(Base, UUIDMixin):

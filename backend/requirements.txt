@@ -49,5 +49,5 @@ airportsdata==20260315
 psycopg2-binary
 pytest
 pytest-asyncio
-duffel-api==3.1.0
+duffel-api==0.6.2
 stripe>=8.0.0

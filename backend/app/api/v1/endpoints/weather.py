@@ -3,11 +3,13 @@ from datetime import date
 from typing import Optional
 import httpx
 import logging
+from fastapi_cache.decorator import cache
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.get("/forecast")
+@cache(expire=None)  # Cache weather data for 1 hour to reduce API calls
 async def get_weather_forecast(
     # Explicitly matching the exact parameters sent by the frontend
     lat: float = Query(..., description="Latitude"),

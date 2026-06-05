@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     FRONTEND_URL: str 
     BACKEND_CORS_ORIGINS: List[str]
-    POSTGRES_URL: str 
+    DATABASE_URL: str 
 
     # Stripe API Key for payment processing
     STRIPE_SECRET_KEY: str

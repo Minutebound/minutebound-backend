@@ -3,17 +3,13 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
-    container_name: travel-backend
+    container_name: minutebound-b-backend
     env_file:
       - .env.backend 
     ports:
       - "8000:8000"
     volumes:
       - .:/app
-    environment:
-      - DATABASE_URL=sqlite:///app/data/minutebound_app.db
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - REDIS_URL=redis://redis:6379
     networks:
       - minutebound-network
     depends_on:
@@ -21,10 +17,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      postgres:
+        condition: service_started
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
-    container_name: travel-elasticsearch
+    container_name: minutebound-b-elasticsearch
     ports:
       - "9200:9200"
     environment:
@@ -43,7 +41,7 @@ services:
 
   redis:
     image: redis:alpine
-    container_name: travel-redis
+    container_name: minutebound-b-redis
     ports:
       - "6379:6379"
     networks:
@@ -52,7 +50,7 @@ services:
 
   redis-insight:
     image: redislabs/redisinsight:latest
-    container_name: redis-insight
+    container_name: minutebound-b-redis-insight
     ports:
       - "5540:5540"
     networks:
@@ -61,15 +59,36 @@ services:
     depends_on:
       - redis
 
-  sqlite-viz:
-    image: ghcr.io/coleifer/sqlite-web:latest
+  postgres:
+    image: postgres:15-alpine
+    container_name: minutebound-b-postgres
+    restart: always
+    env_file:
+      - .env.postgres
     ports:
-      - "8080:8080"
+      - "5432:5432"
     volumes:
-      - .:/data
-    command: minutebound_app.db # This must match your filename in the /data folder
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - minutebound-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -h localhost || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: minutebound-b-pgadmin
+    restart: always
+    env_file:
+      - .env.pgadmin
+    ports:
+      - "5050:80"
     depends_on:
-      - backend
+      - postgres
+    networks:
+      - minutebound-network
 
 networks:
   minutebound-network:
@@ -78,4 +97,6 @@ networks:
 
 volumes:
   es_data:
+    driver: local
+  postgres_data:
     driver: local
