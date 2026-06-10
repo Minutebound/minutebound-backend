@@ -51,7 +51,7 @@ class HealthService:
         
         # Unified endpoint definitions (Internal + External)
         api_definitions = {
-            "backend_api": {"url": "Internal Backend Service (Self-Check)", "method": "INTERNAL"},
+            "backend_api": {"url": "http://minutebound-b-backend:8000/", "method": "INTERNAL"},
             "frontend_app": {"url": str(settings.FRONTEND_URL), "method": "GET"},
             "OpenWeather": {"url": f"https://pro.openweathermap.org/data/2.5/weather?lat=0&lon=0&appid={settings.OPENWEATHER_API_KEY or ''}", "method": "GET"},
             "SerpApi": {"url": f"https://serpapi.com/search.json?engine=google&q=test&api_key={settings.SERPAPI_KEY or ''}", "method": "GET"},

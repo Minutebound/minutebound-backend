@@ -68,6 +68,19 @@ def build_pdf_content(payload_dict: dict) -> bytes:
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("helvetica", "I", 11)
     pdf.cell(0, 8, f"Prepared for: {sanitize_text(payload_dict.get('username'))} | {payload_dict.get('check_in_date')} - {payload_dict.get('check_out_date')}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    # --- INJECT CONFIRMATION IDs INTO PDF ---
+    booking_ref = payload_dict.get("booking_ref")
+    system_id = payload_dict.get("system_booking_id")
+    if booking_ref or system_id:
+        pdf.set_font("helvetica", "B", 10)
+        pdf.set_text_color(50, 50, 150)
+        if booking_ref:
+            pdf.cell(0, 6, f"Provider PNR: {booking_ref}", align="C", new_x="LMARGIN", new_y="NEXT")
+        if system_id:
+            pdf.cell(0, 6, f"System Booking ID: {system_id}", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
     total_cost = 0.0
@@ -142,15 +155,6 @@ def build_pdf_content(payload_dict: dict) -> bytes:
         pdf.cell(0, 6, f"    Total Price: ${safe_float(hp):,.2f}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
-    attractions = payload_dict.get("attractions", [])
-    if attractions:
-        draw_section_header("Planned Attractions")
-        pdf.set_font("helvetica", "", 11)
-        for attr in attractions:
-            pdf.cell(0, 7, f"   - {sanitize_text(attr.get('name'))}", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(4)
-
-    # UPDATED SECTION: changed activities to tours
     tours = payload_dict.get("tours", [])
     if tours:
         draw_section_header("Tours & Experiences")
@@ -160,24 +164,6 @@ def build_pdf_content(payload_dict: dict) -> bytes:
             pdf.cell(0, 7, f"   - {sanitize_text(name)}", new_x="LMARGIN", new_y="NEXT")
 
     return bytes(pdf.output())
-
-def send_background_trip_email(user_email: str, user_name: str, destination: str, trip_data: dict):
-    try:
-        pdf_bytes = build_pdf_content(trip_data)
-        msg = EmailMessage()
-        msg['Subject'] = f"Your minutebound Itinerary: {destination}!"
-        msg['From'] = settings.FROM_EMAIL
-        msg['To'] = user_email
-        email_body = f"Hi {user_name},\n\nGreat news! Your trip to {destination} has been successfully saved.\n\nAttached is your custom PDF itinerary.\n\nSafe travels!\nThe minutebound Team"
-        msg.set_content(email_body)
-        msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=f"{destination}_Itinerary.pdf")
-        
-        with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
-            server.starttls()
-            server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-            server.send_message(msg)
-    except Exception as e:
-        print(f"Background email error: {e}")
 
 @router.post("/generate-pdf")
 async def generate_itinerary_pdf(payload: ItineraryGenerateRequest):
@@ -192,10 +178,46 @@ async def generate_itinerary_pdf(payload: ItineraryGenerateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF Generation Failed: {str(e)}")
 
+# --- 🛟 NEW: OPEN ENDPOINT FOR GUEST & USER CHECKOUT RECEIPTS ---
+@router.post("/send-receipt")
+async def send_booking_receipt(payload: ItineraryGenerateRequest, background_tasks: BackgroundTasks):
+    if not payload.email:
+        raise HTTPException(status_code=400, detail="Email is required for receipts")
+        
+    def _send_receipt_email():
+        try:
+            pdf_bytes = build_pdf_content(payload.model_dump())
+            msg = EmailMessage()
+            msg['Subject'] = f"Booking Confirmation & Itinerary: {payload.destination}"
+            msg['From'] = settings.FROM_EMAIL
+            msg['To'] = payload.email
+            
+            body = f"Hi {payload.username},\n\nYour trip to {payload.destination} has been successfully booked!\n\n"
+            
+            if payload.booking_ref:
+                body += f"Airline PNR: {payload.booking_ref}\n"
+            if payload.system_booking_id:
+                body += f"MinuteBound Ref: {payload.system_booking_id}\n"
+                
+            body += "\nAttached is your full itinerary and receipt details.\n\nSafe travels!\nThe minutebound Team"
+            msg.set_content(body)
+            msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=f"{payload.destination}_Itinerary.pdf")
+            
+            with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
+                server.starttls()
+                server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+                server.send_message(msg)
+            print(f"✅ Auto-Receipt sent to {payload.email}")
+        except Exception as e:
+            print(f"❌ Auto-Receipt email error: {e}")
+
+    background_tasks.add_task(_send_receipt_email)
+    return {"message": "Receipt queued successfully"}
+
+
 @router.post("/save", response_model=ItineraryResponse)
 async def save_itinerary(
     payload: ItineraryCreate, 
-    background_tasks: BackgroundTasks, 
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
@@ -217,15 +239,7 @@ async def save_itinerary(
     db.commit()
     db.refresh(new_itinerary)
 
-    user_full_name = f"{current_user.first_name} {current_user.last_name}".strip()
-    background_tasks.add_task(
-        send_background_trip_email,
-        user_email=current_user.email,
-        user_name=user_full_name,
-        destination=new_itinerary.destination,
-        trip_data=payload.data
-    )
-
+    # REMOVED the auto-email logic from here so it doesn't spam users!
     return new_itinerary
 
 @router.get("/me", response_model=List[ItineraryResponse])

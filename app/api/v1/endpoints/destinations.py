@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional, Any
 
 from app.db.database import get_db
+from app.db.models import Destination
 from app.schemas.destination import DestinationCreate, DestinationResponse
 from app.services.destination_service import destination_service
 
@@ -14,20 +15,25 @@ def get_destinations(
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    """
-    Standard list endpoint for destinations.
-    Includes pagination (skip/limit) for efficient data loading.
-    """
-    # If you have a destination_service.py, you can route this through it
-    # return destination_service.get_destinations(db=db, skip=skip, limit=limit)
-    
-    # Otherwise, direct SQLAlchemy query:
+    """Standard list endpoint for destinations."""
     return db.query(Destination).offset(skip).limit(limit).all()
 
 @router.get("/top")
 async def get_top_destinations(db: Session = Depends(get_db)):
     """Returns top manual destinations and live SerpApi trending locations."""
     return await destination_service.get_top_destinations(db)
+
+# --- NEW META FETCH ROUTE ---
+@router.get("/meta", response_model=DestinationResponse)
+async def get_destination_meta(
+    name: str = Query(..., description="City or destination name"),
+    place_name: Optional[str] = Query(None),
+    lat: float = Query(0.0),
+    lon: float = Query(0.0),
+    db: Session = Depends(get_db)
+):
+    """Fetches destination details from DB or dynamically caches from Wikipedia."""
+    return await destination_service.get_or_fetch_destination_meta(db, name, place_name, lat, lon)
 
 @router.post("/", response_model=DestinationResponse)
 def create_destination(dest_in: DestinationCreate, db: Session = Depends(get_db)):

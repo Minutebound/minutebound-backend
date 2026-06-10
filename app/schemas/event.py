@@ -4,13 +4,13 @@ from datetime import datetime
 from app.core.enums import EventCategory
 
 class EventBase(BaseModel):
-    title: str
+    event_title: str
     description: Optional[str] = None
     category: EventCategory
     start_time: datetime
     end_time: Optional[datetime] = None
     destination_id: int
-    address: Optional[str] = None
+    venue_address: Optional[str] = None
     venue_name: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None

@@ -14,6 +14,8 @@ class ItineraryGenerateRequest(BaseModel):
     check_out_date: str
     
     email: Optional[str] = None 
+    booking_ref: Optional[str] = None             # Added PNR
+    system_booking_id: Optional[str] = None       # Added System ID
     drive: Optional[Dict[str, Any]] = None 
     
     flight: Optional[Dict[str, Any]] = None
